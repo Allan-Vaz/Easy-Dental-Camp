@@ -1,0 +1,4056 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Stethoscope, Users, Settings, Printer, Plus, CheckCircle2, AlertTriangle,
+  AlertCircle, FileSpreadsheet, Upload, Download, LogOut, Search,
+  ChevronRight, ChevronLeft, Shield, Check, X, Sparkles, Building2,
+  Calendar, Phone, MapPin, QrCode, ClipboardList, BarChart3, UserPlus,
+  RefreshCw, Edit3, Trash2, Eye, Layers, Grid, FileText, Lock, Image as ImageIcon
+} from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import {
+  getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged
+} from 'firebase/auth';
+import {
+  getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot
+} from 'firebase/firestore';
+
+// ==========================================
+// FIREBASE INITIALIZATION (WITH SAFE FALLBACK)
+// ==========================================
+let app = null;
+let auth = null;
+let db = null;
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'avm-smiles-dental-camp';
+
+try {
+  if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+    const firebaseConfig = JSON.parse(__firebase_config);
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  }
+} catch (err) {
+  console.warn('Running in local demo state mode:', err);
+}
+
+// ==========================================
+// DEFAULT CONFIGURATIONS & PRE-SEEDED DATA
+// ==========================================
+const DEFAULT_DIAGNOSES = [
+  {
+    id: 'cavities',
+    labelEn: 'Cavities Detected',
+    labelMr: 'किडलेले दात',
+    defaultSeverity: 'R',
+    adviceMr: 'तुमच्या पाल्याच्या दातांमध्ये कीड सुरु झाली आहे. पुढील दुखापत व वेदना टाळण्यासाठी वेळीच सिमेंट भरणे (Filling) व उपचाराची गरज आहे.'
+  },
+  {
+    id: 'tartar',
+    labelEn: 'Tartar - Cleaning Needed',
+    labelMr: 'पिवळे दात / टार्टर',
+    defaultSeverity: 'Y',
+    adviceMr: 'दातांवर पिवळी पुट (Tartar) साचली आहे. क्लिनिकमध्ये येऊन दातांची व्यावसायिक स्वच्छता (Scaling) करून घ्यावी.'
+  },
+  {
+    id: 'alignment',
+    labelEn: 'Braces / Alignment Needed',
+    labelMr: 'वेडेवाकडे दात',
+    defaultSeverity: 'Y',
+    adviceMr: 'दातांची रचना सरळ करण्यासाठी तज्ज्ञ ऑर्थोडॉन्टिस्टकडून (Braces/Aligners) तपासणी करून घ्यावी.'
+  },
+  {
+    id: 'milk_tooth',
+    labelEn: 'Retained / Mobile Milk Tooth',
+    labelMr: 'हलणारे दुधाचे दात',
+    defaultSeverity: 'Y',
+    adviceMr: 'दुधाचे दात हलत आहेत किंवा नवीन कायमचे दात येताना जागा कमी पडत आहे. योग्य मार्गदर्शनासाठी डॉक्टरांचा सल्ला घ्यावा.'
+  },
+  {
+    id: 'gums',
+    labelEn: 'Gum Inflammation / Bleeding',
+    labelMr: 'हिरड्यांची सूज / रक्त येणे',
+    defaultSeverity: 'Y',
+    adviceMr: 'हिरड्यांना सूज आहे किंवा ब्रश करताना रक्त येते. हिरड्यांच्या आरोग्यासाठी वेळेवर उपचार घेणे आवश्यक आहे.'
+  },
+  {
+    id: 'stains',
+    labelEn: 'Surface Stains / Discoloration',
+    labelMr: 'दातांवर डाग',
+    defaultSeverity: 'Y',
+    adviceMr: 'दातांवरील बाह्य डाग काढण्यासाठी पॉलिशिंग व स्वच्छतेची शिफारस केली जाते.'
+  }
+];
+
+const DEFAULT_RULE_GROUPS = [
+  {
+    id: 'RG_PRIMARY',
+    name: 'Pre-Primary & Early Primary (Kids)',
+    classes: ['Nursery', 'JRKG', 'SRKG', '1st-A', '2nd-A'],
+    teethPerQuad: 5, // A, B, C, D, E
+    activeChecks: ['cavities', 'milk_tooth', 'gums']
+  },
+  {
+    id: 'RG_MIDDLE',
+    name: 'Upper Primary & Middle School',
+    classes: ['3rd-A', '4th-B', '5th-A', '6th-A', '7th-A'],
+    teethPerQuad: 6, // 1 to 6
+    activeChecks: ['cavities', 'tartar', 'alignment', 'milk_tooth', 'gums']
+  },
+  {
+    id: 'RG_HIGH',
+    name: 'High School & Junior College',
+    classes: ['8th-A', '9th-A', '10th-A'],
+    teethPerQuad: 7, // 1 to 7
+    activeChecks: ['cavities', 'tartar', 'alignment', 'gums', 'stains']
+  }
+];
+
+const ADVICE_TEMPLATES = {
+  URG_FILL: {
+    code: 'URG_FILL',
+    label: 'Urgent Filling / Cavity Care',
+    textMr: 'तुमच्या पाल्याच्या दातांमध्ये कीड सुरु झाली आहे. पुढील दुखापत व वेदना टाळण्यासाठी वेळीच सिमेंट भरणे (Filling) व उपचाराची गरज आहे.',
+    textEn: 'Cavities detected. Timely dental filling is recommended to prevent pain and root canal issues.'
+  },
+  CLEAN_ALIGN: {
+    code: 'CLEAN_ALIGN',
+    label: 'Scaling / Cleaning & Alignment',
+    textMr: 'दातांवर पिवळी पुट (Tartar) साचली आहे किंवा दातांची रचना तपासणे गरजेचे आहे. क्लिनिकमध्ये येऊन दातांची स्वच्छता करून घ्यावी.',
+    textEn: 'Tartar buildup or alignment issue noted. Professional scaling and orthodontic review advised.'
+  },
+  MILK_CARE: {
+    code: 'MILK_CARE',
+    label: 'Milk Tooth / Pediatric Care',
+    textMr: 'दुधाचे दात हलत आहेत किंवा नवीन दात येताना जागा कमी पडत आहे. योग्य मार्गदर्शनासाठी डॉक्टरांचा सल्ला घ्यावा.',
+    textEn: 'Mobile or retained milk tooth observed. Pediatric dental consultation advised for proper eruption.'
+  },
+  HEALTHY: {
+    code: 'HEALTHY',
+    label: 'Healthy Smile (6-Month Routine)',
+    textMr: 'तुमच्या पाल्याचे दात निरोगी आहेत! दिवसातून दोनदा ब्रश करावे आणि दर ६ महिन्यांनी नियमित तपासणी करावी.',
+    textEn: 'Teeth are healthy! Brush twice daily and continue routine 6-month family dental checkups.'
+  }
+};
+
+const DEFAULT_STAFF = [
+  { id: 'stf_admin', username: 'admin', pin: '1234', role: 'admin', displayName: 'Allan Vaz (Admin)' },
+  { id: 'stf_doc1', username: 'drkunal', pin: '4455', role: 'doctor', displayName: 'Dr. Kunal Shet' },
+  { id: 'stf_asst1', username: 'assistant', pin: '1122', role: 'assistant', displayName: 'Camp Assistant' }
+];
+
+const INITIAL_CAMPS = [
+  {
+    id: 'CMP_ADSV_2026',
+    campCode: 'ADSV',
+    instituteName: 'अशोक दादा साबळे विद्यालय, माणगाव',
+    instituteNameEn: 'Ashok Dada Sable Vidyalaya, Mangaon',
+    campDate: '2026-11-10',
+    voucherExpiryDate: '2026-12-10',
+    offerTextMarathi: 'मोफत कुटुंब तपासणी + ५०% सूट!',
+    offerTextEnglish: 'FREE Family Consultation + 50% OFF Scaling & Cleaning for entire family',
+    clinicPhone: '9545660336',
+    clinicAddress: 'Trinity Plaza, Morba Road, Mangaon, Raigad',
+    whatsappCustomUrl: '',
+    schoolLogoData: '',
+    avmLogoData: '',
+    customQrData: '',
+    mascotImageData: '',
+    ruleGroups: DEFAULT_RULE_GROUPS,
+    groups: [
+      {
+        id: '2nd-A',
+        name: '2nd-A',
+        teethPerQuad: 5,
+        activeChecks: ['cavities', 'milk_tooth', 'gums']
+      },
+      {
+        id: '4th-B',
+        name: '4th-B',
+        teethPerQuad: 6,
+        activeChecks: ['cavities', 'tartar', 'alignment', 'milk_tooth', 'gums']
+      },
+      {
+        id: '9th-A',
+        name: '9th-A',
+        teethPerQuad: 7,
+        activeChecks: ['cavities', 'tartar', 'alignment', 'gums', 'stains']
+      }
+    ]
+  }
+];
+
+const INITIAL_PATIENTS = [
+  {
+    id: 'CMP_ADSV_2026_4th-B_12',
+    campId: 'CMP_ADSV_2026',
+    groupId: '4th-B',
+    rollNo: 12,
+    name: 'Omkar Sachin Patil',
+    age: 10,
+    gender: 'M',
+    status: 'checked',
+    exam: {
+      teeth: { UR4: 'C_R', LL5: 'C_R' },
+      flags: ['cavities', 'tartar'],
+      severity: 'R',
+      noteCode: 'URG_FILL',
+      customNote: '',
+      checkedBy: 'Dr. Kunal Shet',
+      updatedAt: '2026-11-10'
+    }
+  },
+  {
+    id: 'CMP_ADSV_2026_4th-B_13',
+    campId: 'CMP_ADSV_2026',
+    groupId: '4th-B',
+    rollNo: 13,
+    name: 'Swara मंगेश सावंत (Swara Mangesh Sawant)',
+    age: 10,
+    gender: 'F',
+    status: 'checked',
+    exam: {
+      teeth: { UL4: 'C_Y' },
+      flags: ['cavities', 'alignment'],
+      severity: 'Y',
+      noteCode: 'CLEAN_ALIGN',
+      customNote: '',
+      checkedBy: 'Dr. Kunal Shet',
+      updatedAt: '2026-11-10'
+    }
+  },
+  {
+    id: 'CMP_ADSV_2026_4th-B_14',
+    campId: 'CMP_ADSV_2026',
+    groupId: '4th-B',
+    rollNo: 14,
+    name: 'Aarav Pramod Pawar',
+    age: 9,
+    gender: 'M',
+    status: 'checked',
+    exam: {
+      teeth: {},
+      flags: [],
+      severity: 'G',
+      noteCode: 'HEALTHY',
+      customNote: '',
+      checkedBy: 'Dr. Kunal Shet',
+      updatedAt: '2026-11-10'
+    }
+  },
+  {
+    id: 'CMP_ADSV_2026_4th-B_15',
+    campId: 'CMP_ADSV_2026',
+    groupId: '4th-B',
+    rollNo: 15,
+    name: 'Tanvi संदीप कदम (Tanvi Sandeep Kadam)',
+    age: 10,
+    gender: 'F',
+    status: 'checked',
+    exam: {
+      teeth: { LR6: 'C_R', UL2: 'R' },
+      flags: ['cavities', 'milk_tooth'],
+      severity: 'R',
+      noteCode: 'URG_FILL',
+      customNote: 'Lower right molar needs deep filling.',
+      checkedBy: 'Dr. Kunal Shet',
+      updatedAt: '2026-11-10'
+    }
+  },
+  {
+    id: 'CMP_ADSV_2026_4th-B_16',
+    campId: 'CMP_ADSV_2026',
+    groupId: '4th-B',
+    rollNo: 16,
+    name: 'Rohan Santosh More',
+    age: 10,
+    gender: 'M',
+    status: 'pending',
+    exam: { teeth: {}, flags: [], severity: 'G', noteCode: 'HEALTHY', customNote: '' }
+  },
+  {
+    id: 'CMP_ADSV_2026_4th-B_17',
+    campId: 'CMP_ADSV_2026',
+    groupId: '4th-B',
+    rollNo: 17,
+    name: 'Ananya Shinde',
+    age: 9,
+    gender: 'F',
+    status: 'pending',
+    exam: { teeth: {}, flags: [], severity: 'G', noteCode: 'HEALTHY', customNote: '' }
+  },
+  {
+    id: 'CMP_ADSV_2026_2nd-A_1',
+    campId: 'CMP_ADSV_2026',
+    groupId: '2nd-A',
+    rollNo: 1,
+    name: 'Vedant Jadhav',
+    age: 7,
+    gender: 'M',
+    status: 'checked',
+    exam: {
+      teeth: { URD: 'C_Y', LLE: 'C_R' },
+      flags: ['cavities', 'milk_tooth'],
+      severity: 'R',
+      noteCode: 'MILK_CARE',
+      customNote: '',
+      checkedBy: 'Dr. Kunal Shet',
+      updatedAt: '2026-11-10'
+    }
+  },
+  {
+    id: 'CMP_ADSV_2026_9th-A_1',
+    campId: 'CMP_ADSV_2026',
+    groupId: '9th-A',
+    rollNo: 1,
+    name: 'Sahil Deshmukh',
+    age: 14,
+    gender: 'M',
+    status: 'checked',
+    exam: {
+      teeth: { LR6: 'C_Y' },
+      flags: ['tartar', 'alignment'],
+      severity: 'Y',
+      noteCode: 'CLEAN_ALIGN',
+      customNote: '',
+      checkedBy: 'Dr. Kunal Shet',
+      updatedAt: '2026-11-10'
+    }
+  }
+];
+
+// Helper to get tooth labels based on teethPerQuad (5 -> A..E, 6..8 -> 1..8)
+const getToothLabels = (count) => {
+  if (Number(count) === 5) return ['A', 'B', 'C', 'D', 'E'];
+  return Array.from({ length: Number(count) || 6 }, (_, i) => String(i + 1));
+};
+
+// Helper to format date nicely (e.g., 10th Nov 2026)
+const formatDisplayDate = (isoDate) => {
+  if (!isoDate) return '10 Nov 2026';
+  const d = new Date(isoDate + 'T00:00:00');
+  if (isNaN(d.getTime())) return isoDate;
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+// Resolves a class/group ID (e.g. '4th-B' or 'Nursery') to its assigned Named Rule Group
+const resolveClassRules = (camp, classId) => {
+  const ruleGroups = camp?.ruleGroups || DEFAULT_RULE_GROUPS;
+  const matchedRG = ruleGroups.find((rg) => (rg.classes || []).includes(classId));
+  if (matchedRG) {
+    return {
+      ruleGroupId: matchedRG.id,
+      ruleGroupName: matchedRG.name,
+      teethPerQuad: Number(matchedRG.teethPerQuad) || 6,
+      activeChecks: matchedRG.activeChecks || ['cavities', 'tartar', 'alignment']
+    };
+  }
+  const fallbackGrp = (camp?.groups || []).find((g) => g.id === classId);
+  return {
+    ruleGroupId: 'UNASSIGNED',
+    ruleGroupName: 'Default Class Rules',
+    teethPerQuad: Number(fallbackGrp?.teethPerQuad) || 6,
+    activeChecks: fallbackGrp?.activeChecks || ['cavities', 'tartar', 'alignment']
+  };
+};
+
+// Auto-calculate severity & noteCode from teeth and flags
+const evaluateClinicalState = (teethMap = {}, flags = []) => {
+  const toothValues = Object.values(teethMap);
+  const hasRedCavity = toothValues.includes('C_R');
+  const yellowCavityCount = toothValues.filter((v) => v === 'C_Y').length;
+  const hasAnyCavity = hasRedCavity || yellowCavityCount > 0;
+  const hasRetained = toothValues.includes('R');
+
+  const nextFlags = new Set(flags);
+  if (hasAnyCavity) nextFlags.add('cavities');
+  if (hasRetained) nextFlags.add('milk_tooth');
+
+  let severity = 'G';
+  let noteCode = 'HEALTHY';
+
+  if (hasRedCavity || yellowCavityCount >= 2) {
+    severity = 'R';
+    noteCode = 'URG_FILL';
+  } else if (yellowCavityCount === 1 || nextFlags.has('cavities')) {
+    severity = 'Y';
+    noteCode = 'URG_FILL';
+  } else if (nextFlags.has('milk_tooth') || hasRetained) {
+    severity = 'Y';
+    noteCode = 'MILK_CARE';
+  } else if (nextFlags.size > 0 || toothValues.length > 0) {
+    severity = 'Y';
+    noteCode = 'CLEAN_ALIGN';
+  }
+
+  return {
+    flags: Array.from(nextFlags),
+    severity,
+    noteCode
+  };
+};
+
+// Default SVG Mascot & Logo Helpers
+const DefaultAvmLogoBadge = ({ size = 'md' }) => (
+  <div className="flex items-center gap-1.5 select-none">
+    <div
+      className={`${
+        size === 'sm' ? 'w-7 h-7 text-sm' : 'w-9 h-9 text-lg'
+      } rounded-lg bg-[#1B2F5A] border-2 border-[#E52629] text-white flex items-center justify-center font-black shadow-sm shrink-0`}
+    >
+      🦷
+    </div>
+    <div className="leading-none text-left">
+      <div
+        className={`${
+          size === 'sm' ? 'text-[11px]' : 'text-[13px]'
+        } font-black text-[#1B2F5A] tracking-tight`}
+      >
+        AVM <span className="text-[#E52629]">SMILES</span>
+      </div>
+      <div className="text-[8.5px] font-extrabold text-[#1B2F5A] tracking-wider uppercase">
+        Dental Wellness
+      </div>
+      <div className="text-[7.5px] font-bold text-slate-500">MANGAON</div>
+    </div>
+  </div>
+);
+
+const DefaultCartoonMascotSVG = () => (
+  <svg viewBox="0 0 80 80" className="w-full h-full">
+    <circle cx="40" cy="40" r="36" fill="#FFFFFF" stroke="#1B2F5A" strokeWidth="2.5" />
+    <circle cx="40" cy="40" r="32" fill="#f0f4fa" />
+    {/* Cute Cartoon Tooth */}
+    <path
+      d="M24 28 C24 17, 36 17, 40 21 C44 17, 56 17, 56 28 C56 38, 52 46, 50 57 C49 62, 44 62, 42 54 C41 50, 39 50, 38 54 C36 62, 31 62, 30 57 C28 46, 24 38, 24 28 Z"
+      fill="#FFFFFF"
+      stroke="#1B2F5A"
+      strokeWidth="2.5"
+    />
+    {/* Eyes & Smile */}
+    <circle cx="34" cy="31" r="2.2" fill="#1B2F5A" />
+    <circle cx="46" cy="31" r="2.2" fill="#1B2F5A" />
+    <path d="M34 37 Q40 43 46 37" fill="none" stroke="#E52629" strokeWidth="2.5" strokeLinecap="round" />
+    {/* Sparkle */}
+    <path d="M58 16 L60 21 L65 23 L60 25 L58 30 L56 25 L51 23 L56 21 Z" fill="#E52629" />
+  </svg>
+);
+
+// ==========================================
+// VISUAL TOOTH ARCH SVG COMPONENT (FOR A5 REPORT CARD)
+// ==========================================
+const VisualToothMapSVG = ({ teethPerQuad = 6, teethData = {} }) => {
+  const labels = getToothLabels(teethPerQuad);
+
+  // Generates coordinates along an arch for a quadrant
+  const getArchCoordinates = (quadrant, index, total) => {
+    const t = 0.14 + (index / Math.max(total - 1, 1)) * 0.78;
+    const angle = t * (Math.PI / 2);
+    const rx = 72;
+    const ry = 76;
+
+    if (quadrant === 'UL') {
+      return {
+        x: 110 - Math.sin(angle) * rx,
+        y: 100 - Math.cos(angle) * ry
+      };
+    }
+    if (quadrant === 'UR') {
+      return {
+        x: 110 + Math.sin(angle) * rx,
+        y: 100 - Math.cos(angle) * ry
+      };
+    }
+    if (quadrant === 'LL') {
+      return {
+        x: 110 - Math.sin(angle) * rx,
+        y: 126 + Math.cos(angle) * ry
+      };
+    }
+    return {
+      x: 110 + Math.sin(angle) * rx,
+      y: 126 + Math.cos(angle) * ry
+    };
+  };
+
+  const quadrants = ['UL', 'UR', 'LL', 'LR'];
+
+  return (
+    <svg viewBox="0 0 220 226" className="w-full h-auto max-h-[172px] select-none">
+      {/* Quadrant Labels in Marathi */}
+      <text x="10" y="15" className="text-[9.5px] font-extrabold fill-[#1B2F5A]">वरचे-डावे</text>
+      <text x="158" y="15" className="text-[9.5px] font-extrabold fill-[#1B2F5A]">वरचे-उजवे</text>
+      <text x="10" y="219" className="text-[9.5px] font-extrabold fill-[#1B2F5A]">खालचे-डावे</text>
+      <text x="154" y="219" className="text-[9.5px] font-extrabold fill-[#1B2F5A]">खालचे-उजवे</text>
+
+      {/* Upper Gum Arch */}
+      <path
+        d="M 26 100 C 26 2, 194 2, 194 100 C 194 108, 172 108, 170 98 C 168 32, 52 32, 50 98 C 48 108, 26 108, 26 100 Z"
+        fill="#f2a2a4"
+        stroke="#1B2F5A"
+        strokeWidth="1.2"
+      />
+      <path
+        d="M 50 96 C 54 36, 166 36, 170 96 Z"
+        fill="#e38285"
+        opacity="0.45"
+      />
+
+      {/* Lower Gum Arch */}
+      <path
+        d="M 26 126 C 26 224, 194 224, 194 126 C 194 118, 172 118, 170 128 C 168 194, 52 194, 50 128 C 48 118, 26 118, 26 126 Z"
+        fill="#f2a2a4"
+        stroke="#1B2F5A"
+        strokeWidth="1.2"
+      />
+      <path
+        d="M 50 130 C 54 190, 166 190, 170 130 Z"
+        fill="#e38285"
+        opacity="0.4"
+      />
+
+      {/* Dashed Quadrant Divider Crosshairs */}
+      <line x1="110" y1="6" x2="110" y2="220" stroke="#1B2F5A" strokeWidth="1.2" strokeDasharray="3,3" />
+      <line x1="14" y1="113" x2="206" y2="113" stroke="#1B2F5A" strokeWidth="1.2" strokeDasharray="3,3" />
+
+      {/* Render Individual Teeth along the Arches */}
+      {quadrants.map((q) =>
+        labels.map((lbl, idx) => {
+          const key = `${q}${lbl}`;
+          const status = teethData[key]; // 'C_R', 'C_Y', 'M', 'R', or undefined
+          const { x, y } = getArchCoordinates(q, idx, labels.length);
+          const isMolar = idx >= 3;
+          const r = isMolar ? 8 : 6.8;
+
+          return (
+            <g key={key} transform={`translate(${x}, ${y})`}>
+              {/* Base Tooth Shape */}
+              <circle
+                cx="0"
+                cy="0"
+                r={r}
+                fill={status === 'M' ? '#1B2F5A' : '#FFFFFF'}
+                stroke="#1B2F5A"
+                strokeWidth="1.3"
+              />
+              {/* Inner occlusal groove for normal/cavity teeth */}
+              {isMolar && status !== 'M' && (
+                <path d="M -2.5 -2 L 2.5 2 M -2.5 2 L 2.5 -2" stroke="#94a3b8" strokeWidth="0.8" />
+              )}
+
+              {/* Cavity Deep / Urgent (C_R) -> Dark decay center + Vivid Red (#E52629) Callout Circle */}
+              {status === 'C_R' && (
+                <>
+                  <circle cx="0" cy="0" r="3.6" fill="#E52629" />
+                  <circle
+                    cx="0"
+                    cy="0"
+                    r={r + 5.2}
+                    fill="none"
+                    stroke="#E52629"
+                    strokeWidth="2.6"
+                  />
+                </>
+              )}
+
+              {/* Cavity Early / Moderate (C_Y) -> Amber spot + Yellow/Gold Callout Circle */}
+              {status === 'C_Y' && (
+                <>
+                  <circle cx="0" cy="0" r="3.3" fill="#f59e0b" />
+                  <circle
+                    cx="0"
+                    cy="0"
+                    r={r + 5}
+                    fill="none"
+                    stroke="#f59e0b"
+                    strokeWidth="2.4"
+                  />
+                </>
+              )}
+
+              {/* Retained / Mobile Milk Tooth (R) -> Dashed Orange Ring */}
+              {status === 'R' && (
+                <circle
+                  cx="0"
+                  cy="0"
+                  r={r + 4.5}
+                  fill="none"
+                  stroke="#ea580c"
+                  strokeWidth="2"
+                  strokeDasharray="2.5,2"
+                />
+              )}
+
+              {/* Missing Tooth (M) -> Bold Navy Blue (#1B2F5A) Filled Circle + Prominent Outer Navy Ring + White Cross */}
+              {status === 'M' && (
+                <>
+                  <path d="M -3.5 -3.5 L 3.5 3.5 M 3.5 -3.5 L -3.5 3.5" stroke="#FFFFFF" strokeWidth="1.8" strokeLinecap="round" />
+                  <circle
+                    cx="0"
+                    cy="0"
+                    r={r + 5.2}
+                    fill="none"
+                    stroke="#1B2F5A"
+                    strokeWidth="2.6"
+                  />
+                </>
+              )}
+
+              {/* Subtle Tooth Index Label when healthy */}
+              {!status && (
+                <text
+                  x="0"
+                  y="2.4"
+                  textAnchor="middle"
+                  className="text-[6.2px] fill-[#1B2F5A]/70 font-bold"
+                >
+                  {lbl}
+                </text>
+              )}
+            </g>
+          );
+        })
+      )}
+    </svg>
+  );
+};
+
+// ==========================================
+// PRINTABLE A5 REPORT CARD COMPONENT
+// 66.67% TOP REPORT / 33.33% BOTTOM VOUCHER
+// BRAND COLORS: DEEP NAVY (#1B2F5A), VIVID RED (#E52629), WHITE (#FFFFFF)
+// ==========================================
+const StudentA5ReportCard = ({ student, camp, group, diagnosesList }) => {
+  const exam = student?.exam || { teeth: {}, flags: [], severity: 'G', noteCode: 'HEALTHY' };
+  const resolvedRules = resolveClassRules(camp, student?.groupId || group?.id);
+  const teethPerQuad = resolvedRules.teethPerQuad || group?.teethPerQuad || 6;
+  const voucherCode = `${camp?.campCode || 'CAMP'}-${student?.groupId}-${student?.rollNo}`;
+
+  // Construct WhatsApp pre-filled message link or use custom URL if provided
+  const cleanPhone = (camp?.clinicPhone || '9545660336').replace(/\D/g, '');
+  const waPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+  const waMessage = `Hello AVM Smiles Dental Clinic, I received the School Dental Report Card for ${student?.name} (Class ${student?.groupId}, Roll No ${student?.rollNo}, Voucher: ${voucherCode}) and want to book the Free Family Consultation & 50% Off Scaling offer.`;
+  const targetWaUrl = camp?.whatsappCustomUrl?.trim()
+    ? camp.whatsappCustomUrl.trim()
+    : `https://wa.me/${waPhone}?text=${encodeURIComponent(waMessage)}`;
+
+  const qrImageSrc = camp?.customQrData
+    ? camp.customQrData
+    : `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=4&color=1B2F5A&data=${encodeURIComponent(targetWaUrl)}`;
+
+  const adviceObj = ADVICE_TEMPLATES[exam.noteCode] || ADVICE_TEMPLATES.HEALTHY;
+
+  // Determine checklist items to show on the card from the class's Rule Group + any flagged items
+  const ruleCheckIds =
+    resolvedRules.activeChecks?.length > 0
+      ? resolvedRules.activeChecks
+      : ['cavities', 'tartar', 'alignment'];
+  const extraCheckedIds = (exam.flags || []).filter((f) => !ruleCheckIds.includes(f));
+  const displayCheckIds = [...ruleCheckIds, ...extraCheckedIds].slice(0, 4);
+
+  // Single Highest Active Severity Badge Config (Red > Yellow > Green) — English First, Marathi Second
+  const severityBadgeConfig = {
+    R: {
+      bg: 'bg-[#E52629] text-white border-[#E52629]',
+      titleEn: 'Urgent Action Needed',
+      titleMr: 'तत्काळ उपचाराची गरज'
+    },
+    Y: {
+      bg: 'bg-amber-500 text-white border-amber-600',
+      titleEn: 'Medium Care Needed',
+      titleMr: 'लक्ष देणे आवश्यक'
+    },
+    G: {
+      bg: 'bg-emerald-600 text-white border-emerald-700',
+      titleEn: 'Healthy Smile',
+      titleMr: 'उत्तम आरोग्य'
+    }
+  }[exam.severity || 'G'];
+
+  return (
+    <div className="a5-report-card w-[148mm] h-[208mm] bg-white border-2 border-[#1B2F5A] rounded-md overflow-hidden flex flex-col text-slate-900 shadow-md print:shadow-none box-border select-none">
+      {/* ======================================================= */}
+      {/* TOP 66.67% (2/3 HEIGHT): CLINICAL DENTAL REPORT SECTION */}
+      {/* ======================================================= */}
+      <div className="h-[66.67%] flex flex-col justify-between bg-white overflow-hidden">
+        {/* Dual Brand Header (Deep Navy Blue #1B2F5A & White with Vivid Red #E52629 Accent) */}
+        <div className="grid grid-cols-12 bg-[#1B2F5A] border-b-2 border-[#E52629] shrink-0">
+          {/* Left: School Logo & Name */}
+          <div className="col-span-7 px-2.5 py-2 flex items-center gap-2.5 text-white">
+            {camp?.schoolLogoData ? (
+              <img
+                src={camp.schoolLogoData}
+                alt="School Logo"
+                className="w-10 h-10 rounded-full object-contain bg-white p-0.5 border-2 border-[#E52629] shrink-0"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-white border-2 border-[#E52629] flex items-center justify-center shrink-0 text-[#1B2F5A] font-black text-[11px] shadow-inner">
+                शाळा
+              </div>
+            )}
+            <div className="leading-tight min-w-0">
+              <div className="text-[14px] font-black tracking-tight text-white truncate">
+                {camp?.instituteName || 'अशोक दादा साबळे विद्यालय, माणगाव'}
+              </div>
+              <div className="text-[9.5px] text-slate-200 font-semibold">
+                School Dental Health Report (शालेय दंत आरोग्य तपासणी अहवाल)
+              </div>
+            </div>
+          </div>
+
+          {/* Right: AVM Smiles Clinic Logo */}
+          <div className="col-span-5 bg-white px-2.5 py-1.5 flex items-center justify-end gap-2 border-l-4 border-[#E52629]">
+            <span className="text-[9px] font-bold text-slate-500 italic">with</span>
+            {camp?.avmLogoData ? (
+              <img
+                src={camp.avmLogoData}
+                alt="AVM Smiles Logo"
+                className="max-h-10 max-w-[125px] object-contain"
+              />
+            ) : (
+              <DefaultAvmLogoBadge size="md" />
+            )}
+          </div>
+        </div>
+
+        {/* Student Demographics Bar */}
+        <div className="px-3 py-1.5 bg-[#f4f7fb] border-b border-[#1B2F5A]/20 text-[11px] grid grid-cols-12 gap-y-1 items-center shrink-0">
+          <div className="col-span-7 flex items-baseline gap-1.5">
+            <span className="font-bold text-[#1B2F5A]">Name:</span>
+            <span className="font-extrabold text-slate-900 border-b border-[#1B2F5A]/40 flex-1 pb-0.5 truncate">
+              {student?.name}
+            </span>
+          </div>
+          <div className="col-span-5 flex items-baseline justify-between gap-2 pl-2">
+            <div>
+              <span className="font-bold text-[#1B2F5A]">Age: </span>
+              <span className="font-extrabold border-b border-[#1B2F5A]/40 px-1.5">
+                {student?.age || '-'}
+              </span>
+            </div>
+            <div>
+              <span className="font-bold text-[#1B2F5A]">Roll No: </span>
+              <span className="font-extrabold border-b border-[#1B2F5A]/40 px-2">
+                {student?.rollNo}
+              </span>
+            </div>
+          </div>
+          <div className="col-span-6 flex items-baseline gap-1.5">
+            <span className="font-bold text-[#1B2F5A]">Class / Section:</span>
+            <span className="font-extrabold text-slate-900 border-b border-[#1B2F5A]/40 px-2.5">
+              {student?.groupId}
+            </span>
+          </div>
+          <div className="col-span-6 flex items-baseline justify-end gap-1.5">
+            <span className="font-bold text-[#1B2F5A]">Checkup Date:</span>
+            <span className="font-extrabold text-slate-900 border-b border-[#1B2F5A]/40 px-2">
+              {formatDisplayDate(camp?.campDate)}
+            </span>
+          </div>
+        </div>
+
+        {/* Main 2-Column Clinical Diagnostics Area */}
+        <div className="grid grid-cols-12 gap-2 px-2.5 py-2 flex-1 min-h-0 bg-white">
+          {/* Left Column: Visual Tooth Map & 3-Circle Legend */}
+          <div className="col-span-6 bg-[#f8fafd] rounded-md p-2 border border-[#1B2F5A]/25 flex flex-col items-center justify-between">
+            <div className="w-full text-[10.5px] font-black text-[#1B2F5A] border-b border-[#1B2F5A]/15 pb-1 text-center uppercase tracking-tight">
+              Visual Tooth Map & Diagnostics
+            </div>
+
+            <VisualToothMapSVG teethPerQuad={teethPerQuad} teethData={exam.teeth || {}} />
+
+            {/* Clear Visual Circle Legend: English First, Marathi Second */}
+            <div className="w-full grid grid-cols-3 gap-1 pt-1.5 border-t border-[#1B2F5A]/15 text-[8px] font-extrabold text-[#1B2F5A]">
+              <div className="flex items-center gap-1 bg-red-50 px-1 py-0.5 rounded border border-[#E52629]/30">
+                <span className="w-3 h-3 rounded-full border-2 border-[#E52629] bg-[#E52629]/20 shrink-0 inline-block"></span>
+                <div className="leading-none">
+                  <div className="text-[#E52629]">Deep Cavity</div>
+                  <div className="text-[7px] text-slate-600">किडलेले दात</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 bg-amber-50 px-1 py-0.5 rounded border border-amber-400/50">
+                <span className="w-3 h-3 rounded-full border-2 border-amber-500 bg-amber-300/30 shrink-0 inline-block"></span>
+                <div className="leading-none">
+                  <div className="text-amber-800">Early Decay</div>
+                  <div className="text-[7px] text-slate-600">सुरुवातीची कीड</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 bg-slate-100 px-1 py-0.5 rounded border border-[#1B2F5A]/40">
+                <span className="w-3 h-3 rounded-full border-2 border-[#1B2F5A] bg-[#1B2F5A] text-white text-[7px] flex items-center justify-center shrink-0 leading-none">
+                  ✕
+                </span>
+                <div className="leading-none">
+                  <div className="text-[#1B2F5A]">Missing Tooth</div>
+                  <div className="text-[7px] text-slate-600">दात नाही</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Single Active Severity Badge + Bilingual Checklist (English First, Marathi Second) */}
+          <div className="col-span-6 bg-[#f8fafd] rounded-md p-2 border border-[#1B2F5A]/25 flex flex-col justify-between">
+            <div>
+              <div className="text-[10.5px] font-black text-[#1B2F5A] border-b border-[#1B2F5A]/15 pb-1 mb-1.5 uppercase tracking-tight">
+                Diagnostics Checklist & Severity
+              </div>
+
+              {/* SINGLE HIGHEST APPLICABLE SEVERITY BOX (English & Marathi) */}
+              <div className="flex items-center justify-between gap-1.5 mb-2 bg-white p-1.5 rounded border border-[#1B2F5A]/20">
+                <div className="leading-tight shrink-0">
+                  <div className="text-[9.5px] font-black text-[#1B2F5A]">Severity / तीव्रता:</div>
+                </div>
+                <div
+                  className={`flex-1 px-2 py-1 rounded border text-center shadow-sm ${severityBadgeConfig.bg}`}
+                >
+                  <div className="text-[9.5px] font-black uppercase tracking-wide leading-tight">
+                    {severityBadgeConfig.titleEn}
+                  </div>
+                  <div className="text-[10px] font-extrabold leading-none mt-0.5">
+                    {severityBadgeConfig.titleMr}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bilingual Checkboxes — English First, Marathi Second */}
+              <div className="space-y-1">
+                {displayCheckIds.map((chkId) => {
+                  const diag =
+                    diagnosesList.find((d) => d.id === chkId) ||
+                    DEFAULT_DIAGNOSES.find((d) => d.id === chkId) || {
+                      id: chkId,
+                      labelEn: chkId,
+                      labelMr: chkId
+                    };
+                  const isChecked = (exam.flags || []).includes(chkId);
+
+                  return (
+                    <div
+                      key={chkId}
+                      className={`flex items-center gap-2 px-1.5 py-1 rounded border ${
+                        isChecked
+                          ? 'bg-red-50/90 border-[#E52629]'
+                          : 'bg-white border-slate-200'
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 font-black text-[11px] ${
+                          isChecked
+                            ? 'bg-[#E52629] text-white border-[#E52629]'
+                            : 'bg-white border-[#1B2F5A]/50'
+                        }`}
+                      >
+                        {isChecked ? '✓' : ''}
+                      </div>
+                      <div className="leading-tight min-w-0">
+                        <span className="text-[10px] font-black text-[#1B2F5A] block truncate">
+                          {diag.labelEn}
+                        </span>
+                        <span className="text-[9px] font-bold text-slate-600 block truncate">
+                          {diag.labelMr}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Dentist Note & Signature Stamp */}
+            <div className="mt-1.5 pt-1.5 border-t border-[#1B2F5A]/20 flex items-end justify-between gap-1.5">
+              <div className="flex-1 min-w-0">
+                <div className="text-[9px] font-black text-[#1B2F5A]">
+                  Dentist&apos;s Note / डॉक्टरांचा सल्ला:
+                </div>
+                <p className="text-[8px] leading-snug text-slate-800 font-semibold mt-0.5 line-clamp-3">
+                  {exam.customNote ? exam.customNote : adviceObj.textMr}
+                </p>
+              </div>
+              <div className="w-24 border border-dashed border-[#1B2F5A] rounded p-1 text-center bg-white shrink-0">
+                <div className="text-[9.5px] font-serif italic text-[#1B2F5A] font-black truncate">
+                  {exam.checkedBy || 'AVM Smiles'}
+                </div>
+                <div className="text-[6.8px] text-slate-500 font-bold leading-tight">
+                  Doctor Sign / Stamp
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ======================================================= */}
+      {/* BOTTOM 33.33% (1/3 HEIGHT): TEAR-AWAY FAMILY VOUCHER    */}
+      {/* ======================================================= */}
+      <div className="h-[33.33%] flex flex-col justify-between bg-white border-t-2 border-dashed border-[#E52629] overflow-hidden">
+        {/* Perforation Strip Header */}
+        <div className="bg-[#f4f7fb] py-0.5 px-3 flex items-center justify-between text-[8.5px] font-black text-[#1B2F5A] tracking-wider border-b border-[#1B2F5A]/20 shrink-0">
+          <span>✂ - - - - - - - - - - कट करा / TEAR HERE - - - - - - - - - - ✂</span>
+          <span className="font-mono text-[#E52629]">VOUCHER ID: {voucherCode}</span>
+        </div>
+
+        {/* Navy Blue & Vivid Red Offer Banner with AVM Smiles Logo */}
+        <div className="bg-[#1B2F5A] text-white px-3 py-1.5 flex items-center justify-between gap-2 border-b-2 border-[#E52629] shrink-0">
+          <div className="min-w-0 flex-1">
+            <div className="text-[15.5px] font-black text-white tracking-tight leading-tight truncate">
+              {camp?.offerTextMarathi || 'मोफत कुटुंब तपासणी + ५०% सूट!'}
+            </div>
+            <div className="text-[10.5px] font-extrabold text-amber-300 leading-tight truncate">
+              {camp?.offerTextEnglish ||
+                'FREE Family Consultation + 50% OFF Scaling & Cleaning for entire family'}
+            </div>
+          </div>
+
+          {/* AVM Smiles Brand Badge inside Voucher */}
+          <div className="bg-white rounded-md px-2 py-1 shrink-0 border border-[#E52629] shadow-sm">
+            {camp?.avmLogoData ? (
+              <img
+                src={camp.avmLogoData}
+                alt="AVM Smiles"
+                className="h-7 max-w-[95px] object-contain"
+              />
+            ) : (
+              <DefaultAvmLogoBadge size="sm" />
+            )}
+          </div>
+        </div>
+
+        {/* Voucher Body: QR Code (Left) + Complete Address/Contact & Expiry (Center) + Mascot (Right) */}
+        <div className="px-3 py-1.5 flex-1 flex items-center justify-between gap-2.5 bg-gradient-to-r from-white via-[#f4f7fb] to-white">
+          {/* Left: Scannable QR Code + Label */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="w-[62px] h-[62px] bg-white p-1 rounded-md border-2 border-[#1B2F5A] shadow-sm shrink-0">
+              <img
+                src={qrImageSrc}
+                alt="WhatsApp Booking QR"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div className="leading-tight">
+              <div className="text-[10px] font-black text-[#1B2F5A]">अपॉइंटमेंटसाठी</div>
+              <div className="text-[10px] font-black text-[#E52629]">स्कॅन करा</div>
+              <div className="text-[7.5px] font-bold text-slate-600 mt-0.5">
+                Scan to Book on
+                <br />
+                WhatsApp
+              </div>
+            </div>
+          </div>
+
+          {/* Center: Expiry Urgency Badge + Complete Clinic Address & Phone */}
+          <div className="flex-1 border-x border-[#1B2F5A]/20 px-2.5 flex flex-col justify-center min-w-0">
+            {/* Vivid Red 30-Day Expiry Pill */}
+            <div className="inline-flex items-center gap-1.5 bg-[#E52629] text-white px-2 py-0.5 rounded text-[9px] font-black tracking-tight w-fit mb-1 shadow-sm">
+              <span>30 दिवसांसाठी वैध</span>
+              <span>•</span>
+              <span>VALID UNTIL: {formatDisplayDate(camp?.voucherExpiryDate).toUpperCase()}</span>
+            </div>
+
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[9px] font-extrabold text-[#1B2F5A] uppercase">Call/WA:</span>
+              <span className="text-[14px] font-black text-[#E52629] tracking-tight leading-none">
+                {camp?.clinicPhone || '9545660336'}
+              </span>
+            </div>
+
+            <div className="text-[8.5px] font-bold text-[#1B2F5A] leading-tight mt-0.5 line-clamp-2">
+              <span className="text-slate-500 font-semibold">Address: </span>
+              {camp?.clinicAddress || 'Trinity Plaza, Morba Road, Mangaon, Raigad'}
+            </div>
+          </div>
+
+          {/* Right: Custom or Default Cartoon Tooth Mascot */}
+          <div className="w-14 h-14 shrink-0 flex items-center justify-center">
+            {camp?.mascotImageData ? (
+              <img
+                src={camp.mascotImageData}
+                alt="Tooth Mascot"
+                className="w-full h-full object-contain rounded-lg border border-[#1B2F5A]/20 bg-white p-0.5"
+              />
+            ) : (
+              <DefaultCartoonMascotSVG />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
+// MAIN APPLICATION COMPONENT
+// ==========================================
+export default function App() {
+  // Firebase Auth User
+  const [fbUser, setFbUser] = useState(null);
+  const [syncStatus, setSyncStatus] = useState('local'); // 'local' | 'synced' | 'syncing'
+
+  // App Data State
+  const [staffList, setStaffList] = useState(DEFAULT_STAFF);
+  const [camps, setCamps] = useState(INITIAL_CAMPS);
+  const [patients, setPatients] = useState(INITIAL_PATIENTS);
+  const [diagnosesList, setDiagnosesList] = useState(DEFAULT_DIAGNOSES);
+
+  // Active User Session (Role-based PIN auth)
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loginUsername, setLoginUsername] = useState('admin');
+  const [loginPin, setLoginPin] = useState('');
+  const [loginError, setLoginError] = useState('');
+
+  // Navigation & Active Selections
+  const [activeTab, setActiveTab] = useState('checkup'); // 'checkup' | 'print' | 'onboarding' | 'settings' | 'staff'
+  const [selectedCampId, setSelectedCampId] = useState('CMP_ADSV_2026');
+  const [selectedGroupId, setSelectedGroupId] = useState('4th-B');
+
+  // Checkup Screen State
+  const [checkupMode, setCheckupMode] = useState('pad'); // 'pad' | 'grid'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'pending' | 'checked'
+  const [selectedPatientId, setSelectedPatientId] = useState('CMP_ADSV_2026_4th-B_12');
+  const [activeToothPopover, setActiveToothPopover] = useState(null); // e.g., 'UR4'
+  const [toastMessage, setToastMessage] = useState('');
+
+  // Quick Add Student/Staff Modal
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [quickAddForm, setQuickAddForm] = useState({
+    name: '',
+    rollNo: '',
+    age: '10',
+    gender: 'M',
+    groupId: '4th-B'
+  });
+
+  // Print Center Sub-view
+  const [printMode, setPrintMode] = useState('cards'); // 'cards' | 'audit' | 'tally'
+  const [onlyPrintChecked, setOnlyPrintChecked] = useState(false);
+
+  // New Camp Form State
+  const [newCampForm, setNewCampForm] = useState({
+    instituteName: '',
+    campCode: '',
+    campDate: '2026-11-10',
+    voucherExpiryDate: '2026-12-10',
+    offerTextMarathi: 'मोफत कुटुंब तपासणी + ५०% सूट!',
+    offerTextEnglish: 'FREE Family Consultation + 50% OFF Scaling & Cleaning for entire family',
+    groupsInput: 'Nursery, JRKG, SRKG, 1st-A, 2nd-A, 4th-B, 9th-A'
+  });
+
+  // Rule Group Builder & Master Diagnosis Table State
+  const [newRuleGroupName, setNewRuleGroupName] = useState('');
+  const [newRuleGroupTeeth, setNewRuleGroupTeeth] = useState(5);
+  const [newClassInputByRuleGroup, setNewClassInputByRuleGroup] = useState({});
+  const [editingMasterId, setEditingMasterId] = useState(null);
+  const [editingMasterDraft, setEditingMasterDraft] = useState({
+    labelEn: '',
+    labelMr: '',
+    defaultSeverity: 'Y'
+  });
+  const [newDiagForm, setNewDiagForm] = useState({
+    labelEn: '',
+    labelMr: '',
+    defaultSeverity: 'Y'
+  });
+
+  // New Staff Form
+  const [newStaffForm, setNewStaffForm] = useState({
+    username: '',
+    pin: '',
+    role: 'doctor',
+    displayName: ''
+  });
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 3000);
+  };
+
+  // ==========================================
+  // FIREBASE REAL-TIME SYNC SETUP
+  // ==========================================
+  useEffect(() => {
+    if (!auth) return;
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (e) {
+        console.warn('Auth fallback to local memory:', e);
+      }
+    };
+    initAuth();
+    const unsub = onAuthStateChanged(auth, (u) => setFbUser(u));
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (!fbUser || !db) return;
+    setSyncStatus('syncing');
+
+    const campsCol = collection(db, 'artifacts', appId, 'public', 'data', 'camps');
+    const patientsCol = collection(db, 'artifacts', appId, 'public', 'data', 'patients');
+    const staffCol = collection(db, 'artifacts', appId, 'public', 'data', 'staff_users');
+    const diagCol = collection(db, 'artifacts', appId, 'public', 'data', 'diagnoses');
+
+    const unsubCamps = onSnapshot(
+      campsCol,
+      (snap) => {
+        if (snap.empty) {
+          // Seed initial camp into Firestore
+          INITIAL_CAMPS.forEach((c) => {
+            setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'camps', c.id), c);
+          });
+        } else {
+          const list = snap.docs.map((d) => d.data());
+          setCamps(list);
+        }
+        setSyncStatus('synced');
+      },
+      (err) => console.warn('Camps listener error:', err)
+    );
+
+    const unsubPatients = onSnapshot(
+      patientsCol,
+      (snap) => {
+        if (snap.empty) {
+          INITIAL_PATIENTS.forEach((p) => {
+            setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'patients', p.id), p);
+          });
+        } else {
+          const list = snap.docs.map((d) => d.data());
+          setPatients(list);
+        }
+      },
+      (err) => console.warn('Patients listener error:', err)
+    );
+
+    const unsubStaff = onSnapshot(
+      staffCol,
+      (snap) => {
+        if (snap.empty) {
+          DEFAULT_STAFF.forEach((s) => {
+            setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'staff_users', s.id), s);
+          });
+        } else {
+          setStaffList(snap.docs.map((d) => d.data()));
+        }
+      },
+      (err) => console.warn('Staff listener error:', err)
+    );
+
+    const unsubDiag = onSnapshot(
+      diagCol,
+      (snap) => {
+        if (snap.empty) {
+          DEFAULT_DIAGNOSES.forEach((dg) => {
+            setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'diagnoses', dg.id), dg);
+          });
+        } else {
+          setDiagnosesList(snap.docs.map((d) => d.data()));
+        }
+      },
+      (err) => console.warn('Diagnoses listener error:', err)
+    );
+
+    return () => {
+      unsubCamps();
+      unsubPatients();
+      unsubStaff();
+      unsubDiag();
+    };
+  }, [fbUser]);
+
+  // Helper persistence functions (save to local state immediately + Firestore if connected)
+  const saveCampRecord = async (campObj) => {
+    setCamps((prev) => {
+      const exists = prev.some((c) => c.id === campObj.id);
+      return exists ? prev.map((c) => (c.id === campObj.id ? campObj : c)) : [...prev, campObj];
+    });
+    if (fbUser && db) {
+      try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'camps', campObj.id), campObj);
+      } catch (e) {
+        console.warn('Firestore camp save error:', e);
+      }
+    }
+  };
+
+  const savePatientRecord = async (patientObj) => {
+    setPatients((prev) => {
+      const exists = prev.some((p) => p.id === patientObj.id);
+      return exists
+        ? prev.map((p) => (p.id === patientObj.id ? patientObj : p))
+        : [...prev, patientObj];
+    });
+    if (fbUser && db) {
+      try {
+        await setDoc(
+          doc(db, 'artifacts', appId, 'public', 'data', 'patients', patientObj.id),
+          patientObj
+        );
+      } catch (e) {
+        console.warn('Firestore patient save error:', e);
+      }
+    }
+  };
+
+  // Global Master Diagnosis CRUD Helpers (Synced across all camps)
+  const saveMasterDiagnosisItem = async (diagItem) => {
+    setDiagnosesList((prev) => {
+      const exists = prev.some((d) => d.id === diagItem.id);
+      return exists ? prev.map((d) => (d.id === diagItem.id ? diagItem : d)) : [...prev, diagItem];
+    });
+    if (fbUser && db) {
+      try {
+        await setDoc(
+          doc(db, 'artifacts', appId, 'public', 'data', 'diagnoses', diagItem.id),
+          diagItem
+        );
+      } catch (e) {
+        console.warn('Firestore diagnosis save error:', e);
+      }
+    }
+  };
+
+  const deleteMasterDiagnosisItem = async (diagId) => {
+    setDiagnosesList((prev) => prev.filter((d) => d.id !== diagId));
+    // Also clean up references inside camps' ruleGroups and groups
+    camps.forEach((c) => {
+      const updatedRGs = (c.ruleGroups || []).map((rg) => ({
+        ...rg,
+        activeChecks: (rg.activeChecks || []).filter((id) => id !== diagId)
+      }));
+      const updatedGrps = (c.groups || []).map((g) => ({
+        ...g,
+        activeChecks: (g.activeChecks || []).filter((id) => id !== diagId)
+      }));
+      saveCampRecord({ ...c, ruleGroups: updatedRGs, groups: updatedGrps });
+    });
+    if (fbUser && db) {
+      try {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'diagnoses', diagId));
+      } catch (e) {
+        console.warn('Firestore diagnosis delete error:', e);
+      }
+    }
+    showToast('Removed diagnosis from global master list.');
+  };
+
+  // Synchronize camp.groups with camp.ruleGroups so every class inherits its Rule Group settings
+  const updateCampRuleGroups = (nextRuleGroups, extraClassIds = []) => {
+    if (!activeCamp) return;
+    const allKnownClassIds = new Set([
+      ...(activeCamp.groups || []).map((g) => g.id),
+      ...nextRuleGroups.flatMap((rg) => rg.classes || []),
+      ...extraClassIds
+    ]);
+
+    const syncedGroups = Array.from(allKnownClassIds).map((clsId) => {
+      const matchedRG = nextRuleGroups.find((rg) => (rg.classes || []).includes(clsId));
+      const existingGrp = (activeCamp.groups || []).find((g) => g.id === clsId);
+      return {
+        id: clsId,
+        name: clsId,
+        teethPerQuad: matchedRG
+          ? Number(matchedRG.teethPerQuad)
+          : Number(existingGrp?.teethPerQuad) || 6,
+        activeChecks: matchedRG
+          ? matchedRG.activeChecks || []
+          : existingGrp?.activeChecks || ['cavities', 'tartar', 'alignment']
+      };
+    });
+
+    saveCampRecord({
+      ...activeCamp,
+      ruleGroups: nextRuleGroups,
+      groups: syncedGroups
+    });
+  };
+
+  // ==========================================
+  // DERIVED ACTIVE CAMP, GROUP & PATIENT LISTS
+  // ==========================================
+  const activeCamp = useMemo(
+    () => camps.find((c) => c.id === selectedCampId) || camps[0],
+    [camps, selectedCampId]
+  );
+
+  const activeGroup = useMemo(() => {
+    if (!activeCamp?.groups?.length) return null;
+    const rawGrp = activeCamp.groups.find((g) => g.id === selectedGroupId) || activeCamp.groups[0];
+    const resolved = resolveClassRules(activeCamp, rawGrp.id);
+    return {
+      ...rawGrp,
+      teethPerQuad: resolved.teethPerQuad,
+      activeChecks: resolved.activeChecks,
+      ruleGroupName: resolved.ruleGroupName
+    };
+  }, [activeCamp, selectedGroupId]);
+
+  const campPatients = useMemo(() => {
+    if (!activeCamp) return [];
+    return patients
+      .filter((p) => p.campId === activeCamp.id)
+      .sort((a, b) => Number(a.rollNo) - Number(b.rollNo));
+  }, [patients, activeCamp]);
+
+  const groupPatients = useMemo(() => {
+    if (!activeGroup) return [];
+    return campPatients.filter((p) => p.groupId === activeGroup.id);
+  }, [campPatients, activeGroup]);
+
+  const filteredGroupPatients = useMemo(() => {
+    return groupPatients.filter((p) => {
+      const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
+      const matchesSearch =
+        !searchQuery.trim() ||
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        String(p.rollNo).includes(searchQuery.trim());
+      return matchesStatus && matchesSearch;
+    });
+  }, [groupPatients, statusFilter, searchQuery]);
+
+  const activePatient = useMemo(() => {
+    return (
+      groupPatients.find((p) => p.id === selectedPatientId) ||
+      filteredGroupPatients[0] ||
+      groupPatients[0] ||
+      null
+    );
+  }, [groupPatients, filteredGroupPatients, selectedPatientId]);
+
+  // Keep selectedGroupId valid when switching camps
+  useEffect(() => {
+    if (activeCamp?.groups?.length) {
+      const exists = activeCamp.groups.some((g) => g.id === selectedGroupId);
+      if (!exists) {
+        setSelectedGroupId(activeCamp.groups[0].id);
+      }
+    }
+  }, [activeCamp, selectedGroupId]);
+
+  // Keep selectedPatientId valid when switching groups
+  useEffect(() => {
+    if (groupPatients.length > 0) {
+      const exists = groupPatients.some((p) => p.id === selectedPatientId);
+      if (!exists) {
+        setSelectedPatientId(groupPatients[0].id);
+      }
+    }
+  }, [groupPatients, selectedPatientId]);
+
+  // ==========================================
+  // AUTHENTICATION HANDLERS
+  // ==========================================
+  const handleLogin = (usernameInput, pinInput) => {
+    const uName = (usernameInput ?? loginUsername).trim().toLowerCase();
+    const uPin = (pinInput ?? loginPin).trim();
+    const matched = staffList.find(
+      (s) => s.username.toLowerCase() === uName && String(s.pin) === uPin
+    );
+    if (!matched) {
+      setLoginError('Invalid Username or 4-Digit PIN');
+      return;
+    }
+    setLoginError('');
+    setCurrentUser(matched);
+    setLoginPin('');
+    setActiveTab('checkup');
+  };
+
+  const handlePinKeyPress = (digit) => {
+    if (loginPin.length < 4) {
+      const nextPin = loginPin + digit;
+      setLoginPin(nextPin);
+      if (nextPin.length === 4) {
+        handleLogin(loginUsername, nextPin);
+      }
+    }
+  };
+
+  // ==========================================
+  // CLINICAL CHECKUP HANDLERS
+  // ==========================================
+  const updateActivePatientExam = (updaterFn, markChecked = false) => {
+    if (!activePatient) return;
+    const currentExam = activePatient.exam || {
+      teeth: {},
+      flags: [],
+      severity: 'G',
+      noteCode: 'HEALTHY',
+      customNote: ''
+    };
+    const updatedExam = updaterFn(currentExam);
+    const updatedPatient = {
+      ...activePatient,
+      status: markChecked ? 'checked' : activePatient.status,
+      exam: {
+        ...updatedExam,
+        checkedBy: currentUser?.displayName || 'Dr. Kunal Shet',
+        updatedAt: new Date().toISOString().slice(0, 10)
+      }
+    };
+    savePatientRecord(updatedPatient);
+  };
+
+  const setToothStatus = (toothKey, statusValue) => {
+    updateActivePatientExam((exam) => {
+      const nextTeeth = { ...(exam.teeth || {}) };
+      if (!statusValue || statusValue === 'CLEAR') {
+        delete nextTeeth[toothKey];
+      } else {
+        nextTeeth[toothKey] = statusValue;
+      }
+      const autoEval = evaluateClinicalState(nextTeeth, exam.flags || []);
+      return {
+        ...exam,
+        teeth: nextTeeth,
+        flags: autoEval.flags,
+        severity: autoEval.severity,
+        noteCode: autoEval.noteCode
+      };
+    });
+    setActiveToothPopover(null);
+  };
+
+  const toggleDiagnosisFlag = (flagId) => {
+    updateActivePatientExam((exam) => {
+      const currentFlags = exam.flags || [];
+      const exists = currentFlags.includes(flagId);
+      const nextFlags = exists
+        ? currentFlags.filter((f) => f !== flagId)
+        : [...currentFlags, flagId];
+      const autoEval = evaluateClinicalState(exam.teeth || {}, nextFlags);
+      return {
+        ...exam,
+        flags: nextFlags,
+        severity: autoEval.severity,
+        noteCode: autoEval.noteCode
+      };
+    });
+  };
+
+  const handleSaveAndNext = () => {
+    if (!activePatient) return;
+    updateActivePatientExam((exam) => exam, true);
+    showToast(`Saved ${activePatient.name} (Roll No ${activePatient.rollNo})`);
+
+    const currentIndex = groupPatients.findIndex((p) => p.id === activePatient.id);
+    if (currentIndex >= 0 && currentIndex + 1 < groupPatients.length) {
+      setSelectedPatientId(groupPatients[currentIndex + 1].id);
+    }
+  };
+
+  // ==========================================
+  // QUICK ADD STUDENT / STAFF HANDLER
+  // ==========================================
+  const handleQuickAddSubmit = (e) => {
+    e.preventDefault();
+    if (!quickAddForm.name.trim() || !activeCamp) return;
+    const targetGroupId = quickAddForm.groupId || activeGroup?.id || '4th-B';
+    const existingInGroup = campPatients.filter((p) => p.groupId === targetGroupId);
+    const nextRoll =
+      quickAddForm.rollNo.trim() ||
+      (existingInGroup.length > 0
+        ? Math.max(...existingInGroup.map((p) => Number(p.rollNo) || 0)) + 1
+        : 1);
+
+    const newPatientId = `${activeCamp.id}_${targetGroupId}_${nextRoll}_${Date.now().toString().slice(-3)}`;
+    const newPatient = {
+      id: newPatientId,
+      campId: activeCamp.id,
+      groupId: targetGroupId,
+      rollNo: nextRoll,
+      name: quickAddForm.name.trim(),
+      age: Number(quickAddForm.age) || 10,
+      gender: quickAddForm.gender || 'M',
+      status: 'pending',
+      exam: {
+        teeth: {},
+        flags: [],
+        severity: 'G',
+        noteCode: 'HEALTHY',
+        customNote: ''
+      }
+    };
+
+    savePatientRecord(newPatient);
+    setSelectedGroupId(targetGroupId);
+    setSelectedPatientId(newPatientId);
+    setShowQuickAdd(false);
+    setQuickAddForm({ name: '', rollNo: '', age: '10', gender: 'M', groupId: targetGroupId });
+    showToast(`Added ${newPatient.name} & opened checkup pad!`);
+  };
+
+  // ==========================================
+  // BATCH CSV / EXCEL IMPORT & TEMPLATE DOWNLOAD
+  // ==========================================
+  const handleDownloadSampleCSV = () => {
+    const sampleRows = [
+      ['Class', 'RollNo', 'StudentName', 'Age', 'Gender'],
+      ['4th-B', '18', 'Prathamesh Rajesh Kadam', '10', 'M'],
+      ['4th-B', '19', 'Gauri Vinod Sawant', '10', 'F'],
+      ['4th-B', '20', 'Soham Nilesh Chavan', '9', 'M'],
+      ['2nd-A', '2', 'Aaradhya Shinde', '7', 'F'],
+      ['9th-A', '2', 'Aditya Gaikwad', '14', 'M']
+    ];
+    const csvContent =
+      'data:text/csv;charset=utf-8,' + sampleRows.map((r) => r.join(',')).join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `${activeCamp?.campCode || 'School'}_Student_Import_Template.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleCSVFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeCamp) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target.result;
+      const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+      if (lines.length < 2) {
+        showToast('CSV file appears empty.');
+        return;
+      }
+
+      const newGroupsMap = new Map();
+      (activeCamp.groups || []).forEach((g) => newGroupsMap.set(g.id, g));
+
+      let importedCount = 0;
+      lines.slice(1).forEach((line, idx) => {
+        const cols = line.split(',').map((c) => c.trim());
+        if (cols.length < 3) return;
+        const [cls, roll, fullName, ageStr, genStr] = cols;
+        if (!cls || !fullName) return;
+
+        // Auto-create class group if not present
+        if (!newGroupsMap.has(cls)) {
+          const isLower = cls.startsWith('1') || cls.startsWith('2') || cls.startsWith('3');
+          newGroupsMap.set(cls, {
+            id: cls,
+            name: cls,
+            teethPerQuad: isLower ? 5 : 6,
+            activeChecks: isLower
+              ? ['cavities', 'milk_tooth', 'gums']
+              : ['cavities', 'tartar', 'alignment', 'milk_tooth', 'gums']
+          });
+        }
+
+        const rollNumber = Number(roll) || idx + 1;
+        const pid = `${activeCamp.id}_${cls}_${rollNumber}`;
+        const patientRecord = {
+          id: pid,
+          campId: activeCamp.id,
+          groupId: cls,
+          rollNo: rollNumber,
+          name: fullName,
+          age: Number(ageStr) || 10,
+          gender: genStr || 'M',
+          status: 'pending',
+          exam: { teeth: {}, flags: [], severity: 'G', noteCode: 'HEALTHY', customNote: '' }
+        };
+        savePatientRecord(patientRecord);
+        importedCount++;
+      });
+
+      const updatedCamp = {
+        ...activeCamp,
+        groups: Array.from(newGroupsMap.values())
+      };
+      saveCampRecord(updatedCamp);
+      showToast(`Imported ${importedCount} students into ${activeCamp.instituteName}!`);
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  // ==========================================
+  // CREATE NEW CAMP HANDLER
+  // ==========================================
+  const handleCreateNewCamp = (e) => {
+    e.preventDefault();
+    if (!newCampForm.instituteName.trim() || !newCampForm.campCode.trim()) return;
+    const code = newCampForm.campCode.trim().toUpperCase();
+    const newId = `CMP_${code}_${Date.now().toString().slice(-4)}`;
+    const groupNames = newCampForm.groupsInput
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const groups = (groupNames.length ? groupNames : ['4th-A', '8th-A']).map((gName) => {
+      const isKid =
+        gName.startsWith('1') ||
+        gName.startsWith('2') ||
+        gName.startsWith('3') ||
+        gName.toLowerCase().includes('nursery');
+      return {
+        id: gName,
+        name: gName,
+        teethPerQuad: isKid ? 5 : 6,
+        activeChecks: isKid
+          ? ['cavities', 'milk_tooth', 'gums']
+          : ['cavities', 'tartar', 'alignment', 'milk_tooth', 'gums']
+      };
+    });
+
+    const campObj = {
+      id: newId,
+      campCode: code,
+      instituteName: newCampForm.instituteName.trim(),
+      instituteNameEn: newCampForm.instituteName.trim(),
+      campDate: newCampForm.campDate,
+      voucherExpiryDate: newCampForm.voucherExpiryDate,
+      offerTextMarathi: newCampForm.offerTextMarathi,
+      offerTextEnglish: newCampForm.offerTextEnglish,
+      clinicPhone: '9545660336',
+      clinicAddress: 'Trinity Plaza, Morba Road, Mangaon, Raigad',
+      whatsappCustomUrl: '',
+      schoolLogoData: '',
+      avmLogoData: '',
+      customQrData: '',
+      mascotImageData: '',
+      groups
+    };
+
+    saveCampRecord(campObj);
+    setSelectedCampId(newId);
+    setSelectedGroupId(groups[0].id);
+    showToast(`Created Camp: ${campObj.instituteName}`);
+  };
+
+  // Generic Base64 Image Uploader for Logos, QR & Mascot
+  const handleBrandImageUpload = (fieldKey, labelName) => (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeCamp) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const dataUrl = evt.target?.result;
+      if (typeof dataUrl === 'string') {
+        saveCampRecord({
+          ...activeCamp,
+          [fieldKey]: dataUrl
+        });
+        showToast(`Updated ${labelName} for ${activeCamp.campCode}!`);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // ==========================================
+  // RENDER LOGIN SCREEN IF NOT AUTHENTICATED
+  // ==========================================
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-[#133844] to-slate-900 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl overflow-hidden border border-teal-500/30">
+          {/* Clinic Header */}
+          <div className="bg-gradient-to-r from-[#155e75] to-[#0f766e] p-6 text-white text-center">
+            <div className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center mx-auto mb-3 text-3xl shadow-inner border border-white/20">
+              🦷
+            </div>
+            <h1 className="text-xl font-black tracking-tight">AVM SMILES DENTAL CLINIC</h1>
+            <p className="text-xs text-teal-100 font-medium mt-0.5">
+              Trinity Plaza, Morba Road, Mangaon • Camp & Report System
+            </p>
+          </div>
+
+          <div className="p-6 space-y-5">
+            {/* Quick Role Selector Buttons for Instant Testing */}
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                1-Tap Role Demo Login
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {staffList.map((stf) => (
+                  <button
+                    key={stf.id}
+                    type="button"
+                    onClick={() => handleLogin(stf.username, stf.pin)}
+                    className="p-2.5 rounded-xl border border-slate-200 hover:border-teal-500 hover:bg-teal-50/50 transition text-left group"
+                  >
+                    <div className="text-xs font-extrabold text-slate-800 group-hover:text-teal-700 capitalize">
+                      {stf.role}
+                    </div>
+                    <div className="text-[10px] text-slate-500 truncate">{stf.displayName}</div>
+                    <div className="text-[10px] font-mono text-teal-600 font-bold mt-1">
+                      PIN: {stf.pin}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-slate-200"></div>
+              <span className="flex-shrink mx-3 text-xs text-slate-400 font-medium">
+                OR ENTER STAFF PIN
+              </span>
+              <div className="flex-grow border-t border-slate-200"></div>
+            </div>
+
+            {/* Username Selector */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Staff Username</label>
+              <input
+                type="text"
+                value={loginUsername}
+                onChange={(e) => setLoginUsername(e.target.value)}
+                placeholder="e.g. admin, drkunal, assistant"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+
+            {/* 4-Digit PIN Display */}
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="text-xs font-bold text-slate-700">4-Digit Security PIN</label>
+                {loginError && (
+                  <span className="text-xs font-bold text-red-600">{loginError}</span>
+                )}
+              </div>
+              <div className="flex justify-center gap-3 my-2">
+                {[0, 1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center text-xl font-black ${
+                      loginPin.length > i
+                        ? 'border-teal-600 bg-teal-50 text-teal-900'
+                        : 'border-slate-200 bg-slate-50 text-slate-300'
+                    }`}
+                  >
+                    {loginPin.length > i ? '•' : ''}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Interactive Numeric Keypad */}
+            <div className="grid grid-cols-3 gap-2.5">
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+                <button
+                  key={digit}
+                  type="button"
+                  onClick={() => handlePinKeyPress(digit)}
+                  className="py-3 rounded-xl bg-slate-100 hover:bg-teal-600 hover:text-white active:scale-95 transition font-black text-lg text-slate-800 shadow-sm"
+                >
+                  {digit}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setLoginPin('')}
+                className="py-3 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 font-bold text-xs"
+              >
+                CLEAR
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePinKeyPress('0')}
+                className="py-3 rounded-xl bg-slate-100 hover:bg-teal-600 hover:text-white active:scale-95 transition font-black text-lg text-slate-800 shadow-sm"
+              >
+                0
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLogin(loginUsername, loginPin)}
+                className="py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow"
+              >
+                LOGIN →
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // PRINT & AUDIT CALCULATIONS
+  // ==========================================
+  const totalCampStudents = campPatients.length;
+  const checkedCampStudents = campPatients.filter((p) => p.status === 'checked');
+  const redCount = checkedCampStudents.filter((p) => p.exam?.severity === 'R').length;
+  const yellowCount = checkedCampStudents.filter((p) => p.exam?.severity === 'Y').length;
+  const greenCount = checkedCampStudents.filter((p) => p.exam?.severity === 'G').length;
+
+  const printableGroupStudents = onlyPrintChecked
+    ? groupPatients.filter((p) => p.status === 'checked')
+    : groupPatients;
+
+  // Pair students into chunks of 2 for 2-Up A4 Landscape printing
+  const studentPrintPairs = [];
+  for (let i = 0; i < printableGroupStudents.length; i += 2) {
+    studentPrintPairs.push(printableGroupStudents.slice(i, i + 2));
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col">
+      {/* PRINT MEDIA CSS RULES FOR CLEAN 2-UP A5 CARDS ON A4 */}
+      <style>{`
+        @media print {
+          body {
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-sheet-a4-landscape {
+            page-break-after: always;
+            break-after: page;
+            width: 297mm;
+            height: 209mm;
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: space-evenly !important;
+            padding: 0 !important;
+            margin: 0 auto !important;
+            box-sizing: border-box;
+          }
+          .print-audit-page {
+            width: 100%;
+            box-shadow: none !important;
+            border: none !important;
+          }
+        }
+      `}</style>
+
+      {/* FLOATING TOAST NOTIFICATION */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl border border-teal-400 flex items-center gap-2 text-sm font-semibold no-print animate-bounce">
+          <CheckCircle2 className="w-4 h-4 text-teal-400" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* TOP NAVIGATION HEADER (HIDDEN ON PRINT) */}
+      <header className="bg-[#1B2F5A] text-white shadow-md no-print sticky top-0 z-30 border-b-2 border-[#E52629]">
+        <div className="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+          {/* Brand & Active Camp Selector */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white text-[#1B2F5A] border-2 border-[#E52629] flex items-center justify-center text-xl font-black shadow">
+              🦷
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-black tracking-tight text-base">
+                  AVM <span className="text-[#E52629]">SMILES</span>
+                </span>
+                <span className="text-[10px] uppercase px-2 py-0.5 rounded-full bg-white/15 text-white font-bold border border-white/20">
+                  {syncStatus === 'synced' ? 'Cloud Synced' : 'Offline-First Ready'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mt-0.5">
+                <select
+                  value={activeCamp?.id || ''}
+                  onChange={(e) => setSelectedCampId(e.target.value)}
+                  className="bg-slate-900/90 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-lg border border-slate-600 focus:outline-none"
+                >
+                  {camps.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      🏕️ {c.instituteName} ({c.campCode})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Role-Based Navigation Tabs */}
+          <nav className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => setActiveTab('checkup')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+                activeTab === 'checkup'
+                  ? 'bg-[#E52629] text-white shadow-sm'
+                  : 'text-slate-200 hover:bg-white/10'
+              }`}
+            >
+              <Stethoscope className="w-4 h-4" />
+              <span>Live Checkup</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('print')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+                activeTab === 'print'
+                  ? 'bg-[#E52629] text-white shadow-sm'
+                  : 'text-slate-200 hover:bg-white/10'
+              }`}
+            >
+              <Printer className="w-4 h-4" />
+              <span>Print & School Audit</span>
+            </button>
+
+            {currentUser.role === 'admin' && (
+              <>
+                <button
+                  onClick={() => setActiveTab('onboarding')}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+                    activeTab === 'onboarding'
+                      ? 'bg-[#E52629] text-white shadow-sm'
+                      : 'text-slate-200 hover:bg-white/10'
+                  }`}
+                >
+                  <Building2 className="w-4 h-4" />
+                  <span>Camp, Logos & Excel</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('settings')}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+                    activeTab === 'settings'
+                      ? 'bg-[#E52629] text-white shadow-sm'
+                      : 'text-slate-200 hover:bg-white/10'
+                  }`}
+                >
+                  <Settings className="w-4 h-4" />
+                  <span>Diagnosis Rules</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('staff')}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+                    activeTab === 'staff'
+                      ? 'bg-[#E52629] text-white shadow-sm'
+                      : 'text-slate-200 hover:bg-white/10'
+                  }`}
+                >
+                  <Shield className="w-4 h-4" />
+                  <span>Staff PINs</span>
+                </button>
+              </>
+            )}
+          </nav>
+
+          {/* Logged-in Staff Badge & Logout */}
+          <div className="flex items-center gap-2">
+            <div className="text-right hidden sm:block">
+              <div className="text-xs font-bold text-white">{currentUser.displayName}</div>
+              <div className="text-[10px] uppercase tracking-wider text-teal-300 font-bold">
+                Role: {currentUser.role}
+              </div>
+            </div>
+            <button
+              onClick={() => setCurrentUser(null)}
+              className="p-2 rounded-xl bg-red-500/20 hover:bg-red-500/40 text-red-200 border border-red-400/30 transition"
+              title="Switch User / Logout"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* QUICK ADD STUDENT / STAFF MODAL */}
+      {showQuickAdd && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 no-print">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+              <div className="flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-teal-600" />
+                <h3 className="font-black text-base text-slate-900">
+                  Quick Add Unlisted Student / Staff
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowQuickAdd(false)}
+                className="p-1 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            <form onSubmit={handleQuickAddSubmit} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Full Name (English or Marathi) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={quickAddForm.name}
+                  onChange={(e) => setQuickAddForm({ ...quickAddForm, name: e.target.value })}
+                  placeholder="e.g. Chinmay Shinde"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm font-semibold"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Class/Group</label>
+                  <select
+                    value={quickAddForm.groupId}
+                    onChange={(e) => setQuickAddForm({ ...quickAddForm, groupId: e.target.value })}
+                    className="w-full px-2.5 py-2 rounded-xl border border-slate-300 text-sm font-bold"
+                  >
+                    {(activeCamp?.groups || []).map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Roll No</label>
+                  <input
+                    type="number"
+                    value={quickAddForm.rollNo}
+                    onChange={(e) => setQuickAddForm({ ...quickAddForm, rollNo: e.target.value })}
+                    placeholder="Auto"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Age</label>
+                  <input
+                    type="number"
+                    value={quickAddForm.age}
+                    onChange={(e) => setQuickAddForm({ ...quickAddForm, age: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowQuickAdd(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow"
+                >
+                  Add & Examine Immediately
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================== */}
+      {/* TAB 1: LIVE CHECKUP INTERFACE (PAD & GRID) */}
+      {/* ========================================== */}
+      {activeTab === 'checkup' && (
+        <main className="max-w-7xl w-full mx-auto p-4 space-y-4 no-print">
+          {/* Top Class Bar, Mode Switcher & Quick Add Button */}
+          <div className="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-black uppercase text-[#1B2F5A] px-2">
+                Select Class / Section:
+              </span>
+              {(activeCamp?.groups || []).map((g) => {
+                const countInGrp = campPatients.filter((p) => p.groupId === g.id).length;
+                const doneInGrp = campPatients.filter(
+                  (p) => p.groupId === g.id && p.status === 'checked'
+                ).length;
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => setSelectedGroupId(g.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border transition flex items-center gap-1.5 ${
+                      activeGroup?.id === g.id
+                        ? 'bg-[#1B2F5A] text-white border-[#1B2F5A] shadow-sm'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>{g.id}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                        activeGroup?.id === g.id
+                          ? 'bg-[#E52629] text-white'
+                          : 'bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {doneInGrp}/{countInGrp}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Toggle between Interactive Pad and Fast Paper-to-Digital Grid */}
+              <div className="bg-slate-100 p-1 rounded-xl flex items-center border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setCheckupMode('pad')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+                    checkupMode === 'pad'
+                      ? 'bg-white text-[#1B2F5A] shadow-sm'
+                      : 'text-slate-600'
+                  }`}
+                >
+                  <Stethoscope className="w-3.5 h-3.5" />
+                  <span>Doctor Tooth Pad</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCheckupMode('grid')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+                    checkupMode === 'grid'
+                      ? 'bg-white text-[#1B2F5A] shadow-sm'
+                      : 'text-slate-600'
+                  }`}
+                >
+                  <Grid className="w-3.5 h-3.5" />
+                  <span>Fast Paper-to-Digital Grid</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setQuickAddForm((prev) => ({
+                    ...prev,
+                    groupId: activeGroup?.id || '4th-B'
+                  }));
+                  setShowQuickAdd(true);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-[#E52629] hover:bg-red-700 text-white text-xs font-black flex items-center gap-1.5 shadow-sm transition"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>+ Quick Add Student/Staff</span>
+              </button>
+            </div>
+          </div>
+
+          {checkupMode === 'pad' ? (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+              {/* Left Column: Classroom Student Queue (4 Cols) */}
+              <div className="lg:col-span-4 bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col h-[680px]">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <h3 className="text-sm font-black text-[#1B2F5A]">
+                      Class {activeGroup?.id} Roster
+                    </h3>
+                    <p className="text-[11px] text-slate-500 font-semibold">
+                      Rule Group: {activeGroup?.ruleGroupName} ({activeGroup?.teethPerQuad} Teeth/Quad)
+                    </p>
+                  </div>
+                </div>
+
+                {/* Search & Status Filter */}
+                <div className="space-y-2 mb-3">
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search Roll No or Name..."
+                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl text-[11px] font-bold">
+                    {['all', 'pending', 'checked'].map((st) => (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setStatusFilter(st)}
+                        className={`py-1 rounded-lg capitalize ${
+                          statusFilter === st
+                            ? 'bg-white text-[#1B2F5A] shadow-sm'
+                            : 'text-slate-500'
+                        }`}
+                      >
+                        {st}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Scrollable Student List */}
+                <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+                  {filteredGroupPatients.map((p) => {
+                    const isSelected = activePatient?.id === p.id;
+                    const sev = p.exam?.severity || 'G';
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setSelectedPatientId(p.id)}
+                        className={`w-full p-2.5 rounded-xl border text-left transition flex items-center justify-between ${
+                          isSelected
+                            ? 'bg-[#1B2F5A] text-white border-[#1B2F5A] shadow'
+                            : 'bg-slate-50/70 hover:bg-slate-100 border-slate-200 text-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span
+                            className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center shrink-0 ${
+                              isSelected
+                                ? 'bg-[#E52629] text-white'
+                                : 'bg-white border border-slate-300 text-[#1B2F5A]'
+                            }`}
+                          >
+                            {p.rollNo}
+                          </span>
+                          <div className="truncate">
+                            <div className="text-xs font-extrabold truncate">{p.name}</div>
+                            <div
+                              className={`text-[10px] ${
+                                isSelected ? 'text-slate-300' : 'text-slate-500'
+                              }`}
+                            >
+                              Age: {p.age} • {p.gender}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {p.status === 'checked' ? (
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                sev === 'R'
+                                  ? 'bg-[#E52629] text-white'
+                                  : sev === 'Y'
+                                  ? 'bg-amber-400 text-slate-950'
+                                  : 'bg-emerald-500 text-white'
+                              }`}
+                            >
+                              {sev === 'R' ? 'URGENT' : sev === 'Y' ? 'CARE' : 'OK'}
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">
+                              Pending
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Right Column: Interactive Tooth-Grid Checkup Pad (8 Cols) */}
+              <div className="lg:col-span-8 bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col justify-between">
+                {activePatient ? (
+                  <div className="space-y-5">
+                    {/* Active Student Banner */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 bg-[#f4f7fb] p-3.5 rounded-xl border border-[#1B2F5A]/20">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-xl bg-[#1B2F5A] text-white font-black text-base flex items-center justify-center shadow">
+                          #{activePatient.rollNo}
+                        </div>
+                        <div>
+                          <h2 className="text-base font-black text-[#1B2F5A]">
+                            {activePatient.name}
+                          </h2>
+                          <p className="text-xs text-slate-600 font-semibold">
+                            Class: <span className="font-bold">{activePatient.groupId}</span> • Age:{' '}
+                            {activePatient.age} • Rule Group:{' '}
+                            <span className="text-[#E52629] font-bold">
+                              {activeGroup?.ruleGroupName}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Severity Override Pills (English First, Marathi Second) */}
+                      <div className="flex items-center gap-1.5">
+                        {[
+                          { code: 'G', labelEn: 'Healthy', labelMr: 'उत्तम', color: 'bg-emerald-600' },
+                          { code: 'Y', labelEn: 'Medium Care', labelMr: 'मध्यम', color: 'bg-amber-500' },
+                          { code: 'R', labelEn: 'Urgent', labelMr: 'तत्काळ', color: 'bg-[#E52629]' }
+                        ].map((sObj) => {
+                          const isCurrent = (activePatient.exam?.severity || 'G') === sObj.code;
+                          return (
+                            <button
+                              key={sObj.code}
+                              type="button"
+                              onClick={() =>
+                                updateActivePatientExam((ex) => ({ ...ex, severity: sObj.code }))
+                              }
+                              className={`px-3 py-1.5 rounded-xl text-xs font-black transition border ${
+                                isCurrent
+                                  ? `${sObj.color} text-white border-transparent shadow`
+                                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                              }`}
+                            >
+                              {sObj.labelEn} / {sObj.labelMr}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 4-Quadrant Interactive Tooth Boxes */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-black uppercase tracking-wider text-[#1B2F5A]">
+                          1. Tap Affected Tooth Box ({activeGroup?.teethPerQuad || 6} Teeth per
+                          Quadrant)
+                        </label>
+                        <div className="flex items-center gap-3 text-[11px] font-bold">
+                          <span className="flex items-center gap-1 text-[#E52629]">
+                            <span className="w-2.5 h-2.5 rounded-full bg-[#E52629] inline-block"></span>
+                            Deep Cavity (Red)
+                          </span>
+                          <span className="flex items-center gap-1 text-amber-600">
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                            Early Decay (Yellow)
+                          </span>
+                          <span className="flex items-center gap-1 text-[#1B2F5A]">
+                            <span className="w-2.5 h-2.5 rounded-full bg-[#1B2F5A] inline-block"></span>
+                            Missing (Navy Circle)
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                        {[
+                          { q: 'UL', title: 'Upper Left / वरचे-डावे', reverse: true },
+                          { q: 'UR', title: 'Upper Right / वरचे-उजवे', reverse: false },
+                          { q: 'LL', title: 'Lower Left / खालचे-डावे', reverse: true },
+                          { q: 'LR', title: 'Lower Right / खालचे-उजवे', reverse: false }
+                        ].map((quad) => {
+                          const labels = getToothLabels(activeGroup?.teethPerQuad || 6);
+                          const orderedLabels = quad.reverse ? [...labels].reverse() : labels;
+                          return (
+                            <div
+                              key={quad.q}
+                              className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm"
+                            >
+                              <div className="text-[11px] font-black text-[#1B2F5A] mb-2 flex justify-between">
+                                <span>{quad.title}</span>
+                                <span className="text-slate-400 font-mono">{quad.q}</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-1.5">
+                                {orderedLabels.map((lbl) => {
+                                  const tKey = `${quad.q}${lbl}`;
+                                  const st = activePatient.exam?.teeth?.[tKey];
+                                  const isPopOpen = activeToothPopover === tKey;
+
+                                  const badgeStyle =
+                                    st === 'C_R'
+                                      ? 'bg-[#E52629] text-white border-[#E52629] ring-2 ring-red-300'
+                                      : st === 'C_Y'
+                                      ? 'bg-amber-400 text-slate-950 border-amber-500 ring-2 ring-amber-200'
+                                      : st === 'M'
+                                      ? 'bg-[#1B2F5A] text-white border-[#1B2F5A] ring-2 ring-slate-300'
+                                      : st === 'R'
+                                      ? 'bg-orange-500 text-white border-orange-600'
+                                      : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-300';
+
+                                  return (
+                                    <div key={tKey} className="relative flex-1">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setActiveToothPopover(isPopOpen ? null : tKey)
+                                        }
+                                        className={`w-full py-2.5 rounded-lg border-2 font-black text-xs transition flex flex-col items-center justify-center ${badgeStyle}`}
+                                      >
+                                        <span>{lbl}</span>
+                                        <span className="text-[9px] leading-none mt-0.5 opacity-90">
+                                          {st === 'C_R'
+                                            ? 'CAV-R'
+                                            : st === 'C_Y'
+                                            ? 'CAV-Y'
+                                            : st === 'M'
+                                            ? 'MISS'
+                                            : st === 'R'
+                                            ? 'MILK'
+                                            : '•'}
+                                        </span>
+                                      </button>
+
+                                      {/* Popover Selector for Individual Tooth */}
+                                      {isPopOpen && (
+                                        <div className="absolute z-40 top-full mt-1 left-0 w-44 bg-white rounded-xl shadow-2xl border border-slate-200 p-1.5 space-y-1">
+                                          <div className="text-[10px] font-black text-slate-400 px-2 py-0.5">
+                                            Tooth {tKey} Diagnosis
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => setToothStatus(tKey, 'C_R')}
+                                            className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold bg-red-50 hover:bg-[#E52629] hover:text-white text-[#E52629] flex items-center gap-2"
+                                          >
+                                            <span className="w-2.5 h-2.5 rounded-full bg-[#E52629]"></span>
+                                            <span>Deep Cavity (Red)</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setToothStatus(tKey, 'C_Y')}
+                                            className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-50 hover:bg-amber-500 hover:text-white text-amber-800 flex items-center gap-2"
+                                          >
+                                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                                            <span>Early Cavity (Yellow)</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setToothStatus(tKey, 'M')}
+                                            className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-[#1B2F5A] hover:text-white text-[#1B2F5A] flex items-center gap-2"
+                                          >
+                                            <span className="w-2.5 h-2.5 rounded-full bg-[#1B2F5A]"></span>
+                                            <span>Missing Tooth (Navy)</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setToothStatus(tKey, 'R')}
+                                            className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold bg-orange-50 hover:bg-orange-500 hover:text-white text-orange-800 flex items-center gap-2"
+                                          >
+                                            <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+                                            <span>Retained Milk Tooth</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setToothStatus(tKey, 'CLEAR')}
+                                            className="w-full text-left px-2.5 py-1 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-slate-100"
+                                          >
+                                            ✕ Clear / Healthy
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 2. Dynamic Diagnosis Checkboxes (English First, Marathi Second) */}
+                    <div>
+                      <label className="block text-xs font-black uppercase tracking-wider text-[#1B2F5A] mb-2">
+                        2. Diagnosis Checklist for {activeGroup?.ruleGroupName} (English / मराठी)
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                        {(activeGroup?.activeChecks || []).map((chkId) => {
+                          const diag =
+                            diagnosesList.find((d) => d.id === chkId) ||
+                            DEFAULT_DIAGNOSES.find((d) => d.id === chkId) || {
+                              id: chkId,
+                              labelEn: chkId,
+                              labelMr: chkId
+                            };
+                          const isChecked = (activePatient.exam?.flags || []).includes(chkId);
+                          return (
+                            <button
+                              key={chkId}
+                              type="button"
+                              onClick={() => toggleDiagnosisFlag(chkId)}
+                              className={`p-3 rounded-xl border-2 text-left transition flex items-center gap-2.5 ${
+                                isChecked
+                                  ? 'bg-red-50 border-[#E52629] text-[#1B2F5A] shadow-sm'
+                                  : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'
+                              }`}
+                            >
+                              <div
+                                className={`w-5 h-5 rounded-md flex items-center justify-center font-black text-xs shrink-0 ${
+                                  isChecked
+                                    ? 'bg-[#E52629] text-white'
+                                    : 'bg-slate-100 text-transparent border border-slate-300'
+                                }`}
+                              >
+                                ✓
+                              </div>
+                              <div className="leading-tight min-w-0">
+                                <div className="text-xs font-black text-[#1B2F5A] truncate">
+                                  {diag.labelEn}
+                                </div>
+                                <div className="text-[11px] font-bold text-slate-600 truncate">
+                                  {diag.labelMr}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 3. Advice Template & Custom Note */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Advice Template (Printed on Report Card)
+                        </label>
+                        <select
+                          value={activePatient.exam?.noteCode || 'HEALTHY'}
+                          onChange={(e) =>
+                            updateActivePatientExam((ex) => ({ ...ex, noteCode: e.target.value }))
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                        >
+                          {Object.values(ADVICE_TEMPLATES).map((tpl) => (
+                            <option key={tpl.code} value={tpl.code}>
+                              {tpl.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Optional Custom Note Override
+                        </label>
+                        <input
+                          type="text"
+                          value={activePatient.exam?.customNote || ''}
+                          onChange={(e) =>
+                            updateActivePatientExam((ex) => ({
+                              ...ex,
+                              customNote: e.target.value
+                            }))
+                          }
+                          placeholder="Leave blank to use standard Marathi advice..."
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Bottom Action Bar */}
+                    <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateActivePatientExam(
+                            () => ({
+                              teeth: {},
+                              flags: [],
+                              severity: 'G',
+                              noteCode: 'HEALTHY',
+                              customNote: ''
+                            }),
+                            true
+                          );
+                          showToast(`Marked ${activePatient.name} as Healthy (All Clear)`);
+                        }}
+                        className="px-4 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-black text-xs border border-emerald-300"
+                      >
+                        ✓ All Clear (Healthy Smile)
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSaveAndNext}
+                        className="px-6 py-3 rounded-xl bg-[#1B2F5A] hover:bg-slate-800 text-white font-black text-xs shadow-md flex items-center gap-2"
+                      >
+                        <span>Save & Load Next Student</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-12 text-center text-slate-400">
+                    No students in this class yet. Click &ldquo;+ Quick Add&rdquo; or import via
+                    Excel.
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* FAST PAPER-TO-DIGITAL SPREADSHEET ENTRY GRID (English First, Marathi Second) */
+            <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 overflow-x-auto">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-black text-[#1B2F5A]">
+                    Fast Paper-to-Digital Entry Grid — Class {activeGroup?.id}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Rapidly transcribe the doctor&apos;s paper classroom sheet into digital records.
+                  </p>
+                </div>
+              </div>
+
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-[#1B2F5A] text-white">
+                    <th className="p-2.5 rounded-tl-xl">Roll</th>
+                    <th className="p-2.5">Student Name</th>
+                    <th className="p-2.5">Affected Teeth (e.g. UR4:C_R, LL5:M)</th>
+                    {(activeGroup?.activeChecks || []).map((chkId) => {
+                      const dg =
+                        diagnosesList.find((d) => d.id === chkId) ||
+                        DEFAULT_DIAGNOSES.find((d) => d.id === chkId);
+                      return (
+                        <th key={chkId} className="p-2.5 text-center">
+                          <div className="font-black text-[11px]">{dg?.labelEn || chkId}</div>
+                          <div className="text-[9.5px] text-slate-300 font-semibold">
+                            {dg?.labelMr || ''}
+                          </div>
+                        </th>
+                      );
+                    })}
+                    <th className="p-2.5 text-center">Severity</th>
+                    <th className="p-2.5 rounded-tr-xl text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {groupPatients.map((p) => {
+                    const teethSummary = Object.entries(p.exam?.teeth || {})
+                      .map(([k, v]) => `${k}:${v}`)
+                      .join(', ');
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-50">
+                        <td className="p-2.5 font-black text-[#1B2F5A]">#{p.rollNo}</td>
+                        <td className="p-2.5 font-bold">{p.name}</td>
+                        <td className="p-2.5">
+                          <input
+                            type="text"
+                            defaultValue={teethSummary}
+                            placeholder="e.g. UR4:C_R, LL5:C_Y"
+                            onBlur={(e) => {
+                              const raw = e.target.value.trim();
+                              const nextTeeth = {};
+                              if (raw) {
+                                raw.split(',').forEach((pair) => {
+                                  const [k, v] = pair.split(':').map((s) => s.trim().toUpperCase());
+                                  if (k) nextTeeth[k] = v || 'C_R';
+                                });
+                              }
+                              const auto = evaluateClinicalState(nextTeeth, p.exam?.flags || []);
+                              savePatientRecord({
+                                ...p,
+                                status: 'checked',
+                                exam: {
+                                  ...(p.exam || {}),
+                                  teeth: nextTeeth,
+                                  flags: auto.flags,
+                                  severity: auto.severity,
+                                  noteCode: auto.noteCode
+                                }
+                              });
+                            }}
+                            className="w-44 px-2 py-1 rounded border border-slate-300 font-mono text-[11px]"
+                          />
+                        </td>
+                        {(activeGroup?.activeChecks || []).map((chkId) => {
+                          const checked = (p.exam?.flags || []).includes(chkId);
+                          return (
+                            <td key={chkId} className="p-2.5 text-center">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {
+                                  const cur = p.exam?.flags || [];
+                                  const nextFlags = checked
+                                    ? cur.filter((f) => f !== chkId)
+                                    : [...cur, chkId];
+                                  const auto = evaluateClinicalState(
+                                    p.exam?.teeth || {},
+                                    nextFlags
+                                  );
+                                  savePatientRecord({
+                                    ...p,
+                                    status: 'checked',
+                                    exam: {
+                                      ...(p.exam || {}),
+                                      flags: nextFlags,
+                                      severity: auto.severity,
+                                      noteCode: auto.noteCode
+                                    }
+                                  });
+                                }}
+                                className="w-4 h-4 accent-[#E52629] cursor-pointer"
+                              />
+                            </td>
+                          );
+                        })}
+                        <td className="p-2.5 text-center">
+                          <select
+                            value={p.exam?.severity || 'G'}
+                            onChange={(e) =>
+                              savePatientRecord({
+                                ...p,
+                                status: 'checked',
+                                exam: { ...(p.exam || {}), severity: e.target.value }
+                              })
+                            }
+                            className="px-2 py-1 rounded border border-slate-300 font-bold text-xs"
+                          >
+                            <option value="G">Green (Healthy)</option>
+                            <option value="Y">Yellow (Care)</option>
+                            <option value="R">Red (Urgent)</option>
+                          </select>
+                        </td>
+                        <td className="p-2.5 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              p.status === 'checked'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-slate-200 text-slate-600'
+                            }`}
+                          >
+                            {p.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </main>
+      )}
+
+      {/* ========================================== */}
+      {/* TAB 2: PRINT & SCHOOL AUDIT CENTER         */}
+      {/* ========================================== */}
+      {activeTab === 'print' && (
+        <main className="max-w-7xl w-full mx-auto p-4 space-y-6">
+          {/* Print Control Bar (Hidden when printing) */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-3 no-print">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setPrintMode('cards')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition ${
+                  printMode === 'cards'
+                    ? 'bg-[#1B2F5A] text-white shadow'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <Printer className="w-4 h-4" />
+                <span>2-Up A5 Student Report Cards ({printableGroupStudents.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPrintMode('audit')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition ${
+                  printMode === 'audit'
+                    ? 'bg-[#1B2F5A] text-white shadow'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4" />
+                <span>Consolidated Principal Health Audit</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              {printMode === 'cards' && (
+                <>
+                  <select
+                    value={activeGroup?.id || ''}
+                    onChange={(e) => setSelectedGroupId(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                  >
+                    {(activeCamp?.groups || []).map((g) => (
+                      <option key={g.id} value={g.id}>
+                        Class: {g.id}
+                      </option>
+                    ))}
+                  </select>
+
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={onlyPrintChecked}
+                      onChange={(e) => setOnlyPrintChecked(e.target.checked)}
+                      className="accent-[#1B2F5A] w-4 h-4"
+                    />
+                    <span>Only Examined Students</span>
+                  </label>
+                </>
+              )}
+
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-5 py-2.5 rounded-xl bg-[#E52629] hover:bg-red-700 text-white text-xs font-black flex items-center gap-2 shadow-md"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print Now (220 GSM A4 Landscape)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* SUB-VIEW A: 2-UP A5 STUDENT REPORT CARDS */}
+          {printMode === 'cards' && (
+            <div className="space-y-8 flex flex-col items-center">
+              {studentPrintPairs.map((pair, pageIdx) => (
+                <div
+                  key={pageIdx}
+                  className="print-sheet-a4-landscape bg-white p-4 rounded-2xl shadow-md border border-slate-200 flex flex-col xl:flex-row items-center justify-center gap-6"
+                >
+                  {pair.map((stu) => (
+                    <StudentA5ReportCard
+                      key={stu.id}
+                      student={stu}
+                      camp={activeCamp}
+                      group={activeGroup}
+                      diagnosesList={diagnosesList}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* SUB-VIEW B: CONSOLIDATED SCHOOL AUDIT REPORT FOR PRINCIPAL */}
+          {printMode === 'audit' && (
+            <div className="print-audit-page max-w-4xl mx-auto bg-white rounded-2xl p-8 shadow-md border-2 border-[#1B2F5A] space-y-6">
+              <div className="flex items-center justify-between border-b-2 border-[#E52629] pb-4">
+                <div>
+                  <div className="text-xs font-black uppercase tracking-wider text-[#E52629]">
+                    Consolidated School Dental Health Audit Report
+                  </div>
+                  <h1 className="text-2xl font-black text-[#1B2F5A] mt-0.5">
+                    {activeCamp?.instituteName}
+                  </h1>
+                  <p className="text-xs font-bold text-slate-600 mt-1">
+                    Camp Date: {formatDisplayDate(activeCamp?.campDate)} • Conducted by AVM Smiles
+                    Dental Wellness, Mangaon
+                  </p>
+                </div>
+                <DefaultAvmLogoBadge size="md" />
+              </div>
+
+              {/* Executive Summary Cards */}
+              <div className="grid grid-cols-4 gap-4">
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center">
+                  <div className="text-2xl font-black text-[#1B2F5A]">
+                    {checkedCampStudents.length} / {totalCampStudents}
+                  </div>
+                  <div className="text-xs font-bold text-slate-600 mt-1">Students Examined</div>
+                </div>
+                <div className="p-4 rounded-xl bg-red-50 border border-[#E52629]/40 text-center">
+                  <div className="text-2xl font-black text-[#E52629]">{redCount}</div>
+                  <div className="text-xs font-bold text-red-800 mt-1">
+                    Urgent Care Needed (Red)
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl bg-amber-50 border border-amber-300 text-center">
+                  <div className="text-2xl font-black text-amber-600">{yellowCount}</div>
+                  <div className="text-xs font-bold text-amber-900 mt-1">
+                    Medium Care / Scaling (Yellow)
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-300 text-center">
+                  <div className="text-2xl font-black text-emerald-600">{greenCount}</div>
+                  <div className="text-xs font-bold text-emerald-900 mt-1">
+                    Healthy Smile (Green)
+                  </div>
+                </div>
+              </div>
+
+              {/* Class-wise Breakdown Table */}
+              <div>
+                <h3 className="text-sm font-black text-[#1B2F5A] uppercase tracking-wider mb-2">
+                  Class-Wise Dental Health Breakdown
+                </h3>
+                <table className="w-full text-left border-collapse text-xs border border-slate-300">
+                  <thead>
+                    <tr className="bg-[#1B2F5A] text-white">
+                      <th className="p-2.5 border border-slate-300">Class / Section</th>
+                      <th className="p-2.5 border border-slate-300">Rule Group</th>
+                      <th className="p-2.5 border border-slate-300 text-center">Examined</th>
+                      <th className="p-2.5 border border-slate-300 text-center">Urgent (Red)</th>
+                      <th className="p-2.5 border border-slate-300 text-center">Medium (Yellow)</th>
+                      <th className="p-2.5 border border-slate-300 text-center">Healthy (Green)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(activeCamp?.groups || []).map((grp) => {
+                      const stuList = campPatients.filter(
+                        (p) => p.groupId === grp.id && p.status === 'checked'
+                      );
+                      const rC = stuList.filter((p) => p.exam?.severity === 'R').length;
+                      const yC = stuList.filter((p) => p.exam?.severity === 'Y').length;
+                      const gC = stuList.filter((p) => p.exam?.severity === 'G').length;
+                      const rgInfo = resolveClassRules(activeCamp, grp.id);
+                      return (
+                        <tr key={grp.id} className="border-b border-slate-200">
+                          <td className="p-2.5 font-black text-[#1B2F5A] border border-slate-200">
+                            {grp.id}
+                          </td>
+                          <td className="p-2.5 font-semibold text-slate-600 border border-slate-200">
+                            {rgInfo.ruleGroupName}
+                          </td>
+                          <td className="p-2.5 text-center font-bold border border-slate-200">
+                            {stuList.length}
+                          </td>
+                          <td className="p-2.5 text-center font-black text-[#E52629] border border-slate-200">
+                            {rC}
+                          </td>
+                          <td className="p-2.5 text-center font-bold text-amber-700 border border-slate-200">
+                            {yC}
+                          </td>
+                          <td className="p-2.5 text-center font-bold text-emerald-700 border border-slate-200">
+                            {gC}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </main>
+      )}
+
+      {/* ========================================== */}
+      {/* TAB 3: CAMP ONBOARDING, LOGOS & EXCEL      */}
+      {/* ========================================== */}
+      {activeTab === 'onboarding' && currentUser.role === 'admin' && (
+        <main className="max-w-7xl w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-6 no-print">
+          {/* Left: Edit Active Camp, Voucher Contact/Address & Custom Logos (7 Cols) */}
+          <div className="lg:col-span-7 space-y-6">
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                <div>
+                  <h2 className="text-base font-black text-[#1B2F5A]">
+                    Active Camp Configuration, Address & Voucher Settings
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Updates reflect immediately on all A5 student report cards & tear-away vouchers.
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-lg bg-[#1B2F5A] text-white font-mono text-xs font-bold">
+                  Code: {activeCamp?.campCode}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    School / Institute Name (Marathi or Bilingual)
+                  </label>
+                  <input
+                    type="text"
+                    value={activeCamp?.instituteName || ''}
+                    onChange={(e) =>
+                      saveCampRecord({ ...activeCamp, instituteName: e.target.value })
+                    }
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Camp Date</label>
+                  <input
+                    type="date"
+                    value={activeCamp?.campDate || ''}
+                    onChange={(e) => saveCampRecord({ ...activeCamp, campDate: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#E52629] mb-1">
+                    Voucher Expiry Date (+30 Days Urgency)
+                  </label>
+                  <input
+                    type="date"
+                    value={activeCamp?.voucherExpiryDate || ''}
+                    onChange={(e) =>
+                      saveCampRecord({ ...activeCamp, voucherExpiryDate: e.target.value })
+                    }
+                    className="w-full px-3.5 py-2 rounded-xl border border-red-300 bg-red-50/40 text-sm font-bold text-red-900"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Tear-Off Voucher Headline (Marathi)
+                  </label>
+                  <input
+                    type="text"
+                    value={activeCamp?.offerTextMarathi || ''}
+                    onChange={(e) =>
+                      saveCampRecord({ ...activeCamp, offerTextMarathi: e.target.value })
+                    }
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-bold"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Tear-Off Voucher Sub-Offer (English)
+                  </label>
+                  <input
+                    type="text"
+                    value={activeCamp?.offerTextEnglish || ''}
+                    onChange={(e) =>
+                      saveCampRecord({ ...activeCamp, offerTextEnglish: e.target.value })
+                    }
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#1B2F5A] mb-1">
+                    Clinic Contact / WhatsApp Number
+                  </label>
+                  <input
+                    type="text"
+                    value={activeCamp?.clinicPhone || ''}
+                    onChange={(e) =>
+                      saveCampRecord({ ...activeCamp, clinicPhone: e.target.value })
+                    }
+                    placeholder="9545660336"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#1B2F5A] mb-1">
+                    Custom WhatsApp Link (Optional Override)
+                  </label>
+                  <input
+                    type="text"
+                    value={activeCamp?.whatsappCustomUrl || ''}
+                    onChange={(e) =>
+                      saveCampRecord({ ...activeCamp, whatsappCustomUrl: e.target.value })
+                    }
+                    placeholder="Auto-generates wa.me link if blank"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-semibold"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-[#1B2F5A] mb-1">
+                    Complete Clinic Address (Printed on Voucher)
+                  </label>
+                  <input
+                    type="text"
+                    value={activeCamp?.clinicAddress || ''}
+                    onChange={(e) =>
+                      saveCampRecord({ ...activeCamp, clinicAddress: e.target.value })
+                    }
+                    placeholder="Trinity Plaza, Morba Road, Mangaon, Raigad"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Custom Brand Logos, QR Image & Cartoon Mascot Uploaders */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
+              <div className="border-b border-slate-200 pb-3">
+                <h3 className="text-base font-black text-[#1B2F5A] flex items-center gap-2">
+                  <ImageIcon className="w-5 h-5 text-[#E52629]" />
+                  <span>Report Card Logos, Custom QR & Mascot Uploads</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Upload PNG/JPG images to customize the School Logo, AVM Smiles Logo, Custom QR
+                  Code, and Cartoon Tooth Mascot on the A5 report card.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* 1. School / Institute Logo */}
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-12 h-12 rounded-xl bg-white border border-slate-300 flex items-center justify-center overflow-hidden shrink-0">
+                      {activeCamp?.schoolLogoData ? (
+                        <img
+                          src={activeCamp.schoolLogoData}
+                          alt="School Logo"
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <span className="text-xs font-black text-[#1B2F5A]">शाळा</span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-extrabold text-[#1B2F5A]">
+                        School / Institute Logo
+                      </div>
+                      <div className="text-[10px] text-slate-500">Top-left header</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <label className="px-2.5 py-1.5 rounded-lg bg-[#1B2F5A] hover:bg-slate-800 text-white text-[11px] font-bold cursor-pointer">
+                      Upload
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleBrandImageUpload('schoolLogoData', 'School Logo')}
+                        className="hidden"
+                      />
+                    </label>
+                    {activeCamp?.schoolLogoData && (
+                      <button
+                        type="button"
+                        onClick={() => saveCampRecord({ ...activeCamp, schoolLogoData: '' })}
+                        className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"
+                        title="Reset"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. AVM Smiles Clinic Logo */}
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-12 h-12 rounded-xl bg-white border border-slate-300 flex items-center justify-center overflow-hidden shrink-0">
+                      {activeCamp?.avmLogoData ? (
+                        <img
+                          src={activeCamp.avmLogoData}
+                          alt="AVM Logo"
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <span className="text-lg">🦷</span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-extrabold text-[#1B2F5A]">
+                        AVM Smiles Logo
+                      </div>
+                      <div className="text-[10px] text-slate-500">Header & Tear-off Voucher</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <label className="px-2.5 py-1.5 rounded-lg bg-[#1B2F5A] hover:bg-slate-800 text-white text-[11px] font-bold cursor-pointer">
+                      Upload
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleBrandImageUpload('avmLogoData', 'AVM Smiles Logo')}
+                        className="hidden"
+                      />
+                    </label>
+                    {activeCamp?.avmLogoData && (
+                      <button
+                        type="button"
+                        onClick={() => saveCampRecord({ ...activeCamp, avmLogoData: '' })}
+                        className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"
+                        title="Reset"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. Custom QR Code Image (Optional Override) */}
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-12 h-12 rounded-xl bg-white border border-slate-300 flex items-center justify-center overflow-hidden shrink-0">
+                      {activeCamp?.customQrData ? (
+                        <img
+                          src={activeCamp.customQrData}
+                          alt="Custom QR"
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <QrCode className="w-6 h-6 text-[#1B2F5A]" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-extrabold text-[#1B2F5A]">
+                        Custom QR Image
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        {activeCamp?.customQrData ? 'Using Uploaded QR' : 'Auto Dynamic WA QR'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <label className="px-2.5 py-1.5 rounded-lg bg-[#1B2F5A] hover:bg-slate-800 text-white text-[11px] font-bold cursor-pointer">
+                      Upload
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleBrandImageUpload('customQrData', 'Custom QR Code')}
+                        className="hidden"
+                      />
+                    </label>
+                    {activeCamp?.customQrData && (
+                      <button
+                        type="button"
+                        onClick={() => saveCampRecord({ ...activeCamp, customQrData: '' })}
+                        className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"
+                        title="Revert to Auto WhatsApp QR"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 4. Cartoon Tooth Mascot (Bottom-Right of Voucher) */}
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-12 h-12 rounded-xl bg-white border border-slate-300 flex items-center justify-center overflow-hidden shrink-0 p-1">
+                      {activeCamp?.mascotImageData ? (
+                        <img
+                          src={activeCamp.mascotImageData}
+                          alt="Mascot"
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <DefaultCartoonMascotSVG />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-extrabold text-[#1B2F5A]">
+                        Cartoon Tooth Mascot
+                      </div>
+                      <div className="text-[10px] text-slate-500">Voucher bottom-right</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <label className="px-2.5 py-1.5 rounded-lg bg-[#1B2F5A] hover:bg-slate-800 text-white text-[11px] font-bold cursor-pointer">
+                      Upload
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleBrandImageUpload('mascotImageData', 'Cartoon Mascot')}
+                        className="hidden"
+                      />
+                    </label>
+                    {activeCamp?.mascotImageData && (
+                      <button
+                        type="button"
+                        onClick={() => saveCampRecord({ ...activeCamp, mascotImageData: '' })}
+                        className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"
+                        title="Reset"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Batch CSV / Excel Student Roster Upload */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                    <FileSpreadsheet className="w-5 h-5 text-teal-600" />
+                    <span>Batch Import Student Roster (CSV / Excel)</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Upload school student list with columns: Class, RollNo, StudentName, Age, Gender
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadSampleCSV}
+                  className="px-3 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-xs font-bold text-slate-700 flex items-center gap-1.5"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download Template CSV</span>
+                </button>
+              </div>
+
+              <label className="border-2 border-dashed border-teal-400 bg-teal-50/40 hover:bg-teal-50 transition rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer text-center">
+                <Upload className="w-8 h-8 text-teal-600 mb-2" />
+                <span className="text-sm font-extrabold text-teal-950">
+                  Click to Upload School Roster (.CSV)
+                </span>
+                <span className="text-xs text-slate-500 mt-1">
+                  Automatically creates classes/sections and assigns roll numbers
+                </span>
+                <input
+                  type="file"
+                  accept=".csv,.txt"
+                  onChange={handleCSVFileUpload}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Right: Onboard a Brand New School / Institute Camp (5 Cols) */}
+          <div className="lg:col-span-5 bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4 h-fit">
+            <div className="border-b border-slate-200 pb-3">
+              <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <Plus className="w-5 h-5 text-teal-600" />
+                <span>Onboard New School / Camp</span>
+              </h2>
+              <p className="text-xs text-slate-500">
+                Create a separate workspace for another school or college in Mangaon, Roha, or Mahad.
+              </p>
+            </div>
+
+            <form onSubmit={handleCreateNewCamp} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Institute Name (Marathi / English) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newCampForm.instituteName}
+                  onChange={(e) =>
+                    setNewCampForm({ ...newCampForm, instituteName: e.target.value })
+                  }
+                  placeholder="e.g. कोकण एज्युकेशन सोसायटी हायस्कूल, माणगाव"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-semibold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Short Camp Code *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newCampForm.campCode}
+                    onChange={(e) => setNewCampForm({ ...newCampForm, campCode: e.target.value })}
+                    placeholder="e.g. KES"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-mono font-bold uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Camp Date</label>
+                  <input
+                    type="date"
+                    value={newCampForm.campDate}
+                    onChange={(e) => setNewCampForm({ ...newCampForm, campDate: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Initial Classes / Sections (Comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={newCampForm.groupsInput}
+                  onChange={(e) => setNewCampForm({ ...newCampForm, groupsInput: e.target.value })}
+                  placeholder="1st-A, 2nd-A, 4th-B, 8th-A"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-semibold"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 rounded-xl bg-[#133844] hover:bg-teal-800 text-white font-black text-xs shadow-md transition"
+              >
+                Create New Camp Workspace
+              </button>
+            </form>
+          </div>
+        </main>
+      )}
+
+      {/* ========================================== */}
+      {/* TAB 4: CONFIGURABLE CAMP SETTINGS & RULES  */}
+      {/* NAMED RULE GROUPS + GLOBAL MASTER TABLE    */}
+      {/* ========================================== */}
+      {activeTab === 'settings' && currentUser.role === 'admin' && (
+        <main className="max-w-7xl w-full mx-auto p-4 space-y-6 no-print">
+          {/* SECTION 1: NAMED CLASS RULE GROUPS (APPLY RULES TO RANGES OF CLASSES AT ONCE) */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
+              <div>
+                <span className="text-[11px] font-black uppercase tracking-wider text-[#E52629]">
+                  Part 1 • Group-Level Class Configuration
+                </span>
+                <h2 className="text-lg font-black text-[#1B2F5A]">
+                  Named Class Rule Groups — {activeCamp?.instituteName}
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Group multiple classes together (e.g., Nursery, JRKG, SRKG, 1st, 2nd), choose
+                  their teeth-per-quadrant once, and assign diagnoses from the dynamic dropdown.
+                </p>
+              </div>
+
+              {/* Create New Rule Group Bar */}
+              <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
+                <input
+                  type="text"
+                  value={newRuleGroupName}
+                  onChange={(e) => setNewRuleGroupName(e.target.value)}
+                  placeholder="New Group Name (e.g. Pre-Primary)"
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white w-52"
+                />
+                <select
+                  value={newRuleGroupTeeth}
+                  onChange={(e) => setNewRuleGroupTeeth(Number(e.target.value))}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white text-[#1B2F5A]"
+                >
+                  <option value={5}>5 Teeth/Quad</option>
+                  <option value={6}>6 Teeth/Quad</option>
+                  <option value={7}>7 Teeth/Quad</option>
+                  <option value={8}>8 Teeth/Quad</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!newRuleGroupName.trim()) {
+                      showToast('Enter a name for the new Class Rule Group.');
+                      return;
+                    }
+                    const currentRGs = activeCamp?.ruleGroups || DEFAULT_RULE_GROUPS;
+                    const newRG = {
+                      id: `RG_${Date.now().toString().slice(-4)}`,
+                      name: newRuleGroupName.trim(),
+                      classes: [],
+                      teethPerQuad: Number(newRuleGroupTeeth) || 5,
+                      activeChecks: ['cavities']
+                    };
+                    updateCampRuleGroups([...currentRGs, newRG]);
+                    setNewRuleGroupName('');
+                    showToast(`Created Rule Group: ${newRG.name}`);
+                  }}
+                  className="px-3.5 py-1.5 rounded-lg bg-[#1B2F5A] hover:bg-slate-800 text-white text-xs font-black flex items-center gap-1 shadow-sm"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Group</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Render Each Named Rule Group Card */}
+            <div className="grid grid-cols-1 gap-5">
+              {(activeCamp?.ruleGroups || DEFAULT_RULE_GROUPS).map((rg) => {
+                const allRuleGroups = activeCamp?.ruleGroups || DEFAULT_RULE_GROUPS;
+
+                // All known classes across camp + rule groups so admin can toggle any class into this group
+                const allCampClassIds = Array.from(
+                  new Set([
+                    ...(activeCamp?.groups || []).map((g) => g.id),
+                    ...allRuleGroups.flatMap((item) => item.classes || [])
+                  ])
+                );
+
+                // Dynamic Dropdown Options: ONLY show Master Diagnoses NOT already added to this Rule Group
+                const availableDropdownDiagnoses = diagnosesList.filter(
+                  (d) => !(rg.activeChecks || []).includes(d.id)
+                );
+
+                return (
+                  <div
+                    key={rg.id}
+                    className="rounded-2xl border-2 border-[#1B2F5A]/15 bg-[#f8fafd] p-5 space-y-4 shadow-sm"
+                  >
+                    {/* Top Row: Editable Group Name, Teeth Per Quadrant Selector, Delete Group */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                      <div className="flex items-center gap-2.5 flex-1 min-w-[240px]">
+                        <Layers className="w-5 h-5 text-[#E52629] shrink-0" />
+                        <input
+                          type="text"
+                          value={rg.name}
+                          onChange={(e) => {
+                            const next = allRuleGroups.map((item) =>
+                              item.id === rg.id ? { ...item, name: e.target.value } : item
+                            );
+                            updateCampRuleGroups(next);
+                          }}
+                          className="px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-sm font-black text-[#1B2F5A] flex-1 max-w-md"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-extrabold text-[#1B2F5A]">
+                            Teeth / Quadrant:
+                          </label>
+                          <select
+                            value={rg.teethPerQuad || 6}
+                            onChange={(e) => {
+                              const next = allRuleGroups.map((item) =>
+                                item.id === rg.id
+                                  ? { ...item, teethPerQuad: Number(e.target.value) }
+                                  : item
+                              );
+                              updateCampRuleGroups(next);
+                              showToast(
+                                `Updated ${rg.name} to ${e.target.value} Teeth per Quadrant`
+                              );
+                            }}
+                            className="px-3 py-1.5 rounded-xl border-2 border-[#1B2F5A]/30 text-xs font-black bg-white text-[#1B2F5A]"
+                          >
+                            <option value={5}>5 Teeth/Quad (Kids A–E • 20 Teeth)</option>
+                            <option value={6}>6 Teeth/Quad (Mixed 1–6 • 24 Teeth)</option>
+                            <option value={7}>7 Teeth/Quad (Adolescent 1–7 • 28 Teeth)</option>
+                            <option value={8}>8 Teeth/Quad (Adult 1–8 • 32 Teeth)</option>
+                          </select>
+                        </div>
+
+                        {allRuleGroups.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = allRuleGroups.filter((item) => item.id !== rg.id);
+                              updateCampRuleGroups(next);
+                              showToast(`Deleted Rule Group: ${rg.name}`);
+                            }}
+                            className="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-[#E52629] border border-red-200"
+                            title="Delete Rule Group"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Middle Row: Classes Assigned to this Rule Group */}
+                    <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-xs font-black text-[#1B2F5A]">
+                          Assigned Classes in &ldquo;{rg.name}&rdquo; (Click any class pill to
+                          assign/remove):
+                        </div>
+
+                        {/* Quick Add Class Tag (e.g., Nursery, JRKG, SRKG, 1st) directly into this group */}
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={newClassInputByRuleGroup[rg.id] || ''}
+                            onChange={(e) =>
+                              setNewClassInputByRuleGroup({
+                                ...newClassInputByRuleGroup,
+                                [rg.id]: e.target.value
+                              })
+                            }
+                            placeholder="Add class (e.g. Nursery, JRKG)"
+                            className="px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-semibold w-48"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const rawInput = (newClassInputByRuleGroup[rg.id] || '').trim();
+                              if (!rawInput) return;
+                              const newTags = rawInput
+                                .split(',')
+                                .map((s) => s.trim())
+                                .filter(Boolean);
+
+                              const next = allRuleGroups.map((item) => {
+                                if (item.id === rg.id) {
+                                  const merged = Array.from(
+                                    new Set([...(item.classes || []), ...newTags])
+                                  );
+                                  return { ...item, classes: merged };
+                                }
+                                return {
+                                  ...item,
+                                  classes: (item.classes || []).filter((c) => !newTags.includes(c))
+                                };
+                              });
+
+                              updateCampRuleGroups(next, newTags);
+                              setNewClassInputByRuleGroup({
+                                ...newClassInputByRuleGroup,
+                                [rg.id]: ''
+                              });
+                              showToast(`Added ${newTags.join(', ')} to ${rg.name}`);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-[#1B2F5A] text-white text-xs font-bold"
+                          >
+                            + Add Class
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5">
+                        {allCampClassIds.map((clsId) => {
+                          const belongsHere = (rg.classes || []).includes(clsId);
+                          return (
+                            <button
+                              key={clsId}
+                              type="button"
+                              onClick={() => {
+                                const next = allRuleGroups.map((item) => {
+                                  if (item.id === rg.id) {
+                                    const updatedClasses = belongsHere
+                                      ? (item.classes || []).filter((c) => c !== clsId)
+                                      : [...(item.classes || []), clsId];
+                                    return { ...item, classes: updatedClasses };
+                                  }
+                                  // Ensure a class only belongs to one rule group at a time
+                                  return belongsHere
+                                    ? item
+                                    : {
+                                        ...item,
+                                        classes: (item.classes || []).filter((c) => c !== clsId)
+                                      };
+                                });
+                                updateCampRuleGroups(next);
+                              }}
+                              className={`px-3 py-1 rounded-lg text-xs font-extrabold border transition flex items-center gap-1.5 ${
+                                belongsHere
+                                  ? 'bg-[#1B2F5A] text-white border-[#1B2F5A] shadow-sm'
+                                  : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-400'
+                              }`}
+                            >
+                              <span>{belongsHere ? '✓' : '+'}</span>
+                              <span>{clsId}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Bottom Row: Clean Dynamic Diagnosis Dropdown + Active Removable Diagnosis Pills */}
+                    <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <div className="text-xs font-black text-[#1B2F5A]">
+                            Active Diagnoses for &ldquo;{rg.name}&rdquo; (English / मराठी)
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            Only diagnoses added below will appear for classes in this group.
+                          </div>
+                        </div>
+
+                        {/* Dynamic Dropdown: Only lists Master Diagnoses NOT already added to this Rule Group */}
+                        <div className="flex items-center gap-2">
+                          <select
+                            value=""
+                            onChange={(e) => {
+                              const selectedDiagId = e.target.value;
+                              if (!selectedDiagId) return;
+                              const next = allRuleGroups.map((item) =>
+                                item.id === rg.id
+                                  ? {
+                                      ...item,
+                                      activeChecks: [...(item.activeChecks || []), selectedDiagId]
+                                    }
+                                  : item
+                              );
+                              updateCampRuleGroups(next);
+                              const addedObj = diagnosesList.find((d) => d.id === selectedDiagId);
+                              showToast(
+                                `Added "${addedObj?.labelEn || selectedDiagId}" to ${rg.name}`
+                              );
+                            }}
+                            className="px-3 py-2 rounded-xl border-2 border-[#1B2F5A] bg-white text-xs font-black text-[#1B2F5A] cursor-pointer focus:outline-none"
+                          >
+                            <option value="">
+                              {availableDropdownDiagnoses.length > 0
+                                ? `+ Add Diagnosis from Master List (${availableDropdownDiagnoses.length} available)...`
+                                : '✓ All Master Diagnoses Added to Group'}
+                            </option>
+                            {availableDropdownDiagnoses.map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.labelEn} — {d.labelMr}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Added Diagnoses List with Delete/Remove Button (English First, Marathi Second) */}
+                      {(rg.activeChecks || []).length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {(rg.activeChecks || []).map((chkId) => {
+                            const diag =
+                              diagnosesList.find((d) => d.id === chkId) ||
+                              DEFAULT_DIAGNOSES.find((d) => d.id === chkId) || {
+                                id: chkId,
+                                labelEn: chkId,
+                                labelMr: chkId
+                              };
+                            return (
+                              <div
+                                key={chkId}
+                                className="inline-flex items-center gap-2.5 pl-3 pr-2 py-1.5 rounded-xl bg-[#f4f7fb] border border-[#1B2F5A]/30 text-xs"
+                              >
+                                <div className="leading-tight">
+                                  <span className="font-black text-[#1B2F5A]">{diag.labelEn}</span>
+                                  <span className="mx-1.5 text-slate-400">•</span>
+                                  <span className="font-bold text-slate-700">{diag.labelMr}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const next = allRuleGroups.map((item) =>
+                                      item.id === rg.id
+                                        ? {
+                                            ...item,
+                                            activeChecks: (item.activeChecks || []).filter(
+                                              (id) => id !== chkId
+                                            )
+                                          }
+                                        : item
+                                    );
+                                    updateCampRuleGroups(next);
+                                    showToast(`Removed "${diag.labelEn}" from ${rg.name}`);
+                                  }}
+                                  className="p-1 rounded-lg bg-red-50 hover:bg-[#E52629] text-[#E52629] hover:text-white transition"
+                                  title="Remove diagnosis from this class group"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-400 italic py-2">
+                          No diagnoses assigned yet. Use the dropdown above to add from the Master
+                          Diagnosis List.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* SECTION 2: GLOBAL EDITABLE MASTER DIAGNOSIS TABLE (AVAILABLE ACROSS ALL CAMPS) */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+              <div>
+                <span className="text-[11px] font-black uppercase tracking-wider text-[#E52629]">
+                  Part 2 • Global Master Database (Shared Across All Camps & Schools)
+                </span>
+                <h3 className="text-lg font-black text-[#1B2F5A]">
+                  Editable Master Diagnosis Table (English First, Marathi Second)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Add, edit, or delete master diagnoses here. Changes are saved globally and
+                  available in the dropdown for every camp and institute.
+                </p>
+              </div>
+            </div>
+
+            {/* Add New Master Diagnosis Row Form */}
+            <div className="bg-[#f4f7fb] p-4 rounded-xl border border-[#1B2F5A]/20 grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              <div className="sm:col-span-4">
+                <label className="block text-[11px] font-black text-[#1B2F5A] mb-1">
+                  1. Diagnosis Name in English *
+                </label>
+                <input
+                  type="text"
+                  value={newDiagForm.labelEn}
+                  onChange={(e) => setNewDiagForm({ ...newDiagForm, labelEn: e.target.value })}
+                  placeholder="e.g. Tobacco Stains / Fluorosis"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                />
+              </div>
+
+              <div className="sm:col-span-4">
+                <label className="block text-[11px] font-black text-[#1B2F5A] mb-1">
+                  2. Diagnosis Name in Marathi (मराठी नाव) *
+                </label>
+                <input
+                  type="text"
+                  value={newDiagForm.labelMr}
+                  onChange={(e) => setNewDiagForm({ ...newDiagForm, labelMr: e.target.value })}
+                  placeholder="e.g. तंबाखूचे डाग / फ्लोरोसिस"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-black text-[#1B2F5A] mb-1">
+                  Default Severity
+                </label>
+                <select
+                  value={newDiagForm.defaultSeverity}
+                  onChange={(e) =>
+                    setNewDiagForm({ ...newDiagForm, defaultSeverity: e.target.value })
+                  }
+                  className="w-full px-2.5 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                >
+                  <option value="R">Red (Urgent)</option>
+                  <option value="Y">Yellow (Medium Care)</option>
+                  <option value="G">Green (Healthy)</option>
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!newDiagForm.labelEn.trim() || !newDiagForm.labelMr.trim()) {
+                      showToast('Please enter both English and Marathi diagnosis names.');
+                      return;
+                    }
+                    const id =
+                      newDiagForm.labelEn
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]/g, '_')
+                        .slice(0, 16) +
+                      '_' +
+                      Date.now().toString().slice(-2);
+                    const newItem = {
+                      id,
+                      labelEn: newDiagForm.labelEn.trim(),
+                      labelMr: newDiagForm.labelMr.trim(),
+                      defaultSeverity: newDiagForm.defaultSeverity || 'Y'
+                    };
+                    saveMasterDiagnosisItem(newItem);
+                    setNewDiagForm({ labelEn: '', labelMr: '', defaultSeverity: 'Y' });
+                    showToast(`Added "${newItem.labelEn} / ${newItem.labelMr}" to Master Table`);
+                  }}
+                  className="w-full py-2 rounded-xl bg-[#E52629] hover:bg-red-700 text-white text-xs font-black shadow-sm"
+                >
+                  + Add Master Row
+                </button>
+              </div>
+            </div>
+
+            {/* Editable Master Diagnosis Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-[#1B2F5A] text-white">
+                    <th className="p-3 rounded-tl-xl">English Name (Primary)</th>
+                    <th className="p-3">Marathi Name (मराठी नाव)</th>
+                    <th className="p-3 text-center">Default Severity</th>
+                    <th className="p-3 rounded-tr-xl text-right">Actions (Edit / Delete)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 border border-slate-200">
+                  {diagnosesList.map((diag) => {
+                    const isEditing = editingMasterId === diag.id;
+                    return (
+                      <tr key={diag.id} className="hover:bg-slate-50">
+                        <td className="p-3 font-black text-[#1B2F5A]">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editingMasterDraft.labelEn}
+                              onChange={(e) =>
+                                setEditingMasterDraft({
+                                  ...editingMasterDraft,
+                                  labelEn: e.target.value
+                                })
+                              }
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-[#1B2F5A] text-xs font-bold"
+                            />
+                          ) : (
+                            diag.labelEn
+                          )}
+                        </td>
+                        <td className="p-3 font-bold text-slate-700">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editingMasterDraft.labelMr}
+                              onChange={(e) =>
+                                setEditingMasterDraft({
+                                  ...editingMasterDraft,
+                                  labelMr: e.target.value
+                                })
+                              }
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-[#1B2F5A] text-xs font-bold"
+                            />
+                          ) : (
+                            diag.labelMr
+                          )}
+                        </td>
+                        <td className="p-3 text-center">
+                          {isEditing ? (
+                            <select
+                              value={editingMasterDraft.defaultSeverity || 'Y'}
+                              onChange={(e) =>
+                                setEditingMasterDraft({
+                                  ...editingMasterDraft,
+                                  defaultSeverity: e.target.value
+                                })
+                              }
+                              className="px-2 py-1 rounded-lg border border-[#1B2F5A] text-xs font-bold"
+                            >
+                              <option value="R">Red (Urgent)</option>
+                              <option value="Y">Yellow (Medium)</option>
+                              <option value="G">Green (Healthy)</option>
+                            </select>
+                          ) : (
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                                diag.defaultSeverity === 'R'
+                                  ? 'bg-red-100 text-[#E52629]'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {diag.defaultSeverity === 'R' ? 'Red (Urgent)' : 'Yellow (Medium)'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-right">
+                          {isEditing ? (
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (
+                                    !editingMasterDraft.labelEn.trim() ||
+                                    !editingMasterDraft.labelMr.trim()
+                                  ) {
+                                    return;
+                                  }
+                                  saveMasterDiagnosisItem({
+                                    ...diag,
+                                    labelEn: editingMasterDraft.labelEn.trim(),
+                                    labelMr: editingMasterDraft.labelMr.trim(),
+                                    defaultSeverity: editingMasterDraft.defaultSeverity || 'Y'
+                                  });
+                                  setEditingMasterId(null);
+                                  showToast(`Updated "${editingMasterDraft.labelEn}"`);
+                                }}
+                                className="px-3 py-1 rounded-lg bg-emerald-600 text-white font-bold text-xs flex items-center gap-1"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Save</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingMasterId(null)}
+                                className="px-2.5 py-1 rounded-lg bg-slate-200 text-slate-700 font-bold text-xs"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingMasterId(diag.id);
+                                  setEditingMasterDraft({
+                                    labelEn: diag.labelEn,
+                                    labelMr: diag.labelMr,
+                                    defaultSeverity: diag.defaultSeverity || 'Y'
+                                  });
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-[#1B2F5A] hover:text-white text-[#1B2F5A] font-bold text-xs inline-flex items-center gap-1 transition"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span>Edit</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteMasterDiagnosisItem(diag.id)}
+                                className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-[#E52629] hover:text-white text-[#E52629] font-bold text-xs inline-flex items-center gap-1 transition"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+      )}
+
+      {/* ========================================== */}
+      {/* TAB 5: STAFF PIN MANAGER (ADMIN ONLY)      */}
+      {/* ========================================== */}
+      {activeTab === 'staff' && currentUser.role === 'admin' && (
+        <main className="max-w-5xl w-full mx-auto p-4 grid grid-cols-1 md:grid-cols-12 gap-6 no-print">
+          <div className="md:col-span-7 bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
+            <h2 className="text-base font-black text-slate-900">
+              Active Camp Staff Accounts (Username + 4-Digit PIN)
+            </h2>
+            <div className="divide-y divide-slate-200">
+              {staffList.map((s) => (
+                <div key={s.id} className="py-3 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-black text-slate-900">{s.displayName}</div>
+                    <div className="text-xs text-slate-500">
+                      Username: <span className="font-mono font-bold text-slate-800">{s.username}</span> •
+                      Role: <span className="uppercase font-bold text-teal-700">{s.role}</span>
+                    </div>
+                  </div>
+                  <div className="px-3 py-1 rounded-lg bg-slate-100 font-mono text-xs font-black text-slate-800 border border-slate-300">
+                    PIN: {s.pin}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="md:col-span-5 bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-3.5 h-fit">
+            <h3 className="text-sm font-black text-slate-900">Add Doctor / Assistant PIN</h3>
+            <input
+              type="text"
+              value={newStaffForm.displayName}
+              onChange={(e) => setNewStaffForm({ ...newStaffForm, displayName: e.target.value })}
+              placeholder="Full Name (e.g. Dr. Sneha)"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold"
+            />
+            <input
+              type="text"
+              value={newStaffForm.username}
+              onChange={(e) => setNewStaffForm({ ...newStaffForm, username: e.target.value })}
+              placeholder="Login Username (e.g. drsneha)"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono font-bold"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                maxLength={4}
+                value={newStaffForm.pin}
+                onChange={(e) =>
+                  setNewStaffForm({ ...newStaffForm, pin: e.target.value.replace(/\D/g, '') })
+                }
+                placeholder="4-Digit PIN (e.g. 7788)"
+                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono font-bold"
+              />
+              <select
+                value={newStaffForm.role}
+                onChange={(e) => setNewStaffForm({ ...newStaffForm, role: e.target.value })}
+                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+              >
+                <option value="doctor">Doctor</option>
+                <option value="assistant">Assistant</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  !newStaffForm.username.trim() ||
+                  newStaffForm.pin.length !== 4 ||
+                  !newStaffForm.displayName.trim()
+                ) {
+                  showToast('Please enter Name, Username, and a 4-digit PIN.');
+                  return;
+                }
+                const newStf = {
+                  id: `stf_${Date.now()}`,
+                  username: newStaffForm.username.trim().toLowerCase(),
+                  pin: newStaffForm.pin,
+                  role: newStaffForm.role,
+                  displayName: newStaffForm.displayName.trim()
+                };
+                setStaffList((prev) => [...prev, newStf]);
+                if (fbUser && db) {
+                  setDoc(
+                    doc(db, 'artifacts', appId, 'public', 'data', 'staff_users', newStf.id),
+                    newStf
+                  );
+                }
+                setNewStaffForm({ username: '', pin: '', role: 'doctor', displayName: '' });
+                showToast(`Created staff login for ${newStf.displayName}`);
+              }}
+              className="w-full py-2.5 rounded-xl bg-teal-600 text-white text-xs font-black shadow"
+            >
+              + Create Staff Account
+            </button>
+          </div>
+        </main>
+      )}
+    </div>
+  );
+}

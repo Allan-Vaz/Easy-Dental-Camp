@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-100 text-slate-900;
+  }
+}
+
+/* Print Media CSS for Clean 2-Up A5 Cards on A4 Landscape and Clean Audit Reports */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 0;
+  }
+
+  body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-sheet-a4-landscape {
+    page-break-after: always;
+    break-after: page;
+    width: 297mm;
+    height: 209mm;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-evenly !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    box-sizing: border-box;
+  }
+
+  .print-audit-page {
+    width: 100%;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 10mm !important;
+  }
+}
