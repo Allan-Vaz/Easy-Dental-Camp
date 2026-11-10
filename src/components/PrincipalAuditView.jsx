@@ -4,17 +4,22 @@ import { formatDisplayDate } from '../utils/clinicalEvaluator';
 import { generateAuditReportPDF } from '../utils/pdfExport';
 import { DefaultAvmLogoBadge } from './A5ReportCard';
 
-export const PrincipalAuditView = ({ activeCamp, campPatients = [], diagnosesList = [] }) => {
+export const PrincipalAuditView = ({ activeCamp, campPatients = [], diagnosesList = [], clinicProfile }) => {
   const checkedStudents = campPatients.filter((p) => p.status === 'checked');
   const redCount = checkedStudents.filter((p) => p.exam?.severity === 'R').length;
   const yellowCount = checkedStudents.filter((p) => p.exam?.severity === 'Y').length;
   const greenCount = checkedStudents.filter((p) => (p.exam?.severity || 'G') === 'G').length;
 
+  const clinicName = clinicProfile?.clinicName || 'AVM Smiles Dental Wellness';
+  const doctorName = clinicProfile?.doctorName || 'Dr. Kunal Shet';
+  const doctorReg = clinicProfile?.doctorRegNo || 'Dental Surgeon • Reg. No. A-28491';
+
   const handleDownloadPDF = () => {
     generateAuditReportPDF({
       camp: activeCamp,
       patients: campPatients,
-      diagnosesList
+      diagnosesList,
+      clinicProfile
     });
   };
 
@@ -59,11 +64,14 @@ export const PrincipalAuditView = ({ activeCamp, campPatients = [], diagnosesLis
               {activeCamp?.instituteName}
             </h1>
             <p className="text-xs font-bold text-slate-600 mt-1">
-              Camp Date: {formatDisplayDate(activeCamp?.campDate)} • Conducted by AVM Smiles Dental
-              Wellness, Mangaon
+              Camp Date: {formatDisplayDate(activeCamp?.campDate)} • Conducted by {clinicName}
             </p>
           </div>
-          <DefaultAvmLogoBadge size="md" />
+          {clinicProfile?.clinicLogoData ? (
+            <img src={clinicProfile.clinicLogoData} alt="Logo" className="max-h-12 max-w-[130px] object-contain" />
+          ) : (
+            <DefaultAvmLogoBadge size="md" />
+          )}
         </div>
 
         {/* Executive Summary Cards */}
@@ -137,12 +145,20 @@ export const PrincipalAuditView = ({ activeCamp, campPatients = [], diagnosesLis
         <div className="pt-6 border-t border-slate-300 flex justify-between items-end text-xs">
           <div>
             <div className="text-slate-500 font-medium">Report Generated On:</div>
-            <div className="font-bold text-slate-800">{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</div>
-            <div className="text-[11px] text-slate-500">AVM Smiles Dental Wellness Camp Management System</div>
+            <div className="font-bold text-slate-800">
+              {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
+            </div>
+            <div className="text-[11px] text-slate-500">{clinicName} Camp Management System</div>
           </div>
           <div className="w-56 border border-dashed border-[#1B2F5A] rounded-xl p-3 text-center bg-slate-50">
-            <div className="text-sm font-serif italic text-[#1B2F5A] font-black">Dr. Kunal Shet</div>
-            <div className="text-[10px] text-slate-600 font-bold mt-0.5">Dental Surgeon • Reg. No. A-28491</div>
+            {clinicProfile?.doctorSignData ? (
+              <img src={clinicProfile.doctorSignData} alt="Stamp" className="max-h-12 max-w-full object-contain mx-auto" />
+            ) : (
+              <>
+                <div className="text-sm font-serif italic text-[#1B2F5A] font-black">{doctorName}</div>
+                <div className="text-[10px] text-slate-600 font-bold mt-0.5">{doctorReg}</div>
+              </>
+            )}
             <div className="text-[9px] text-slate-400 mt-1">Official Clinic Stamp & Signature</div>
           </div>
         </div>

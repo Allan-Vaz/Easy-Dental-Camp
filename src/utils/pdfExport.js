@@ -6,7 +6,7 @@ import { formatDisplayDate } from './clinicalEvaluator';
  * Generates an official, non-editable PDF School Dental Health Audit Report
  * for Principals, School Management, and Education Authorities.
  */
-export const generateAuditReportPDF = ({ camp, patients = [], diagnosesList = [] }) => {
+export const generateAuditReportPDF = ({ camp, patients = [], diagnosesList = [], clinicProfile }) => {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -16,6 +16,12 @@ export const generateAuditReportPDF = ({ camp, patients = [], diagnosesList = []
   const navyColor = [27, 47, 90];      // #1B2F5A
   const crimsonColor = [229, 38, 41];  // #E52629
   const slateDark = [30, 41, 59];
+
+  const clinicName = clinicProfile?.clinicName || 'AVM SMILES DENTAL WELLNESS';
+  const clinicAddress = clinicProfile?.clinicAddress || 'Trinity Plaza, Morba Road, Mangaon, Raigad';
+  const clinicPhone = clinicProfile?.phone || camp?.clinicPhone || '9545660336';
+  const doctorName = clinicProfile?.doctorName || 'Dr. Kunal Shet';
+  const doctorReg = clinicProfile?.doctorRegNo || 'Dental Surgeon • Reg. No. A-28491';
 
   // Camp metrics
   const campPatients = patients.filter((p) => p.campId === camp.id);
@@ -33,12 +39,12 @@ export const generateAuditReportPDF = ({ camp, patients = [], diagnosesList = []
 
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text('AVM SMILES DENTAL WELLNESS', 14, 12);
+  doc.setFontSize(15);
+  doc.text(clinicName.toUpperCase(), 14, 12);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text('Trinity Plaza, Morba Road, Mangaon, Raigad | Phone: ' + (camp.clinicPhone || '9545660336'), 14, 18);
+  doc.setFontSize(8.5);
+  doc.text(`${clinicAddress} | Phone: +91 ${clinicPhone}`, 14, 18);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
@@ -213,19 +219,19 @@ export const generateAuditReportPDF = ({ camp, patients = [], diagnosesList = []
     doc.setFontSize(9);
     doc.text('Examining Dental Surgeon Sign & Stamp:', 130, 30);
     doc.rect(130, 35, 65, 20);
-    doc.text('Dr. Kunal Shet / Dental Team', 135, 47);
+    doc.text(doctorName, 135, 46);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
-    doc.text('AVM Smiles Dental Wellness, Mangaon', 135, 51);
+    doc.text(doctorReg, 135, 50);
   } else {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.text('Examining Dental Surgeon Sign & Stamp:', 130, finalY);
     doc.rect(130, finalY + 4, 65, 20);
-    doc.text('Dr. Kunal Shet / Dental Team', 135, finalY + 14);
+    doc.text(doctorName, 135, finalY + 14);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
-    doc.text('AVM Smiles Dental Wellness, Mangaon', 135, finalY + 18);
+    doc.text(doctorReg, 135, finalY + 18);
   }
 
   // Page Numbers Footer
@@ -236,7 +242,7 @@ export const generateAuditReportPDF = ({ camp, patients = [], diagnosesList = []
     doc.setFontSize(7.5);
     doc.setTextColor(140, 140, 140);
     doc.text(
-      `Official Camp Audit Report • AVM Smiles Dental Wellness • Page ${i} of ${pageCount}`,
+      `Official Camp Audit Report • ${clinicName} • Page ${i} of ${pageCount}`,
       105,
       292,
       { align: 'center' }

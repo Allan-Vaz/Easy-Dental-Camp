@@ -72,3 +72,97 @@ export const evaluateClinicalState = (teethMap = {}, flags = []) => {
     noteCode
   };
 };
+
+/**
+ * Auto-generates standard Camp Code: [Initials]-[MMM][YY]
+ * Example: "Ashok Dada Sable Vidyalaya" in Nov 2026 -> "ADSV-NOV26"
+ */
+export const generateCampCode = (instituteName = '', dateStr = '') => {
+  const d = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  const monthAbbr = months[isNaN(d.getMonth()) ? new Date().getMonth() : d.getMonth()];
+  const yearSuffix = String(isNaN(d.getFullYear()) ? new Date().getFullYear() : d.getFullYear()).slice(-2);
+
+  const cleanName = (instituteName || '').trim();
+  if (!cleanName) {
+    return `CAMP-${monthAbbr}${yearSuffix}`;
+  }
+
+  const hasLatin = /[a-zA-Z]/.test(cleanName);
+  let prefix = '';
+
+  if (hasLatin) {
+    const ignoreWords = new Set(['and', 'of', 'the', 'in', 'at', 'for', 'school', 'vidyalaya', 'college', 'high']);
+    const words = cleanName.split(/[\s,.-]+/).filter((w) => w.length > 0);
+
+    prefix = words
+      .filter((w) => !ignoreWords.has(w.toLowerCase()) || words.length <= 2)
+      .map((w) => w[0].toUpperCase())
+      .join('')
+      .slice(0, 5);
+
+    if (!prefix || prefix.length < 2) {
+      prefix = cleanName.replace(/[^a-zA-Z]/g, '').slice(0, 4).toUpperCase();
+    }
+  } else {
+    const words = cleanName.split(/[\s,.-]+/).filter((w) => w.length > 0);
+    prefix = words.map((w) => w[0]).join('').slice(0, 4);
+    if (!prefix) prefix = 'CAMP';
+  }
+
+  return `${prefix || 'CAMP'}-${monthAbbr}${yearSuffix}`;
+};
+
+/**
+ * Auto-calculates Voucher Expiry Date = Camp Date + N Days (Default: 30 days)
+ */
+export const calculateVoucherExpiry = (campDate, days = 30) => {
+  const base = campDate ? new Date(campDate + 'T00:00:00') : new Date();
+  if (isNaN(base.getTime())) return '';
+  base.setDate(base.getDate() + Number(days || 30));
+  return base.toISOString().slice(0, 10);
+};
+
+/**
+ * Harmonizes class names (e.g. "IV A", "4-a", "4th A" -> "4th-A")
+ */
+export const normalizeClassName = (rawClass = '') => {
+  let s = String(rawClass || '').trim();
+  if (!s) return 'General';
+
+  if (/staff|teacher|faculty|शिक्षक/i.test(s)) {
+    return 'Staff & Teachers';
+  }
+
+  if (/nursery|nur|शिशु/i.test(s)) return 'Nursery';
+  if (/jr\.?\s*kg|lkg|कनिष्ठ/i.test(s)) return 'JRKG';
+  if (/sr\.?\s*kg|ukg|वरिष्ठ/i.test(s)) return 'SRKG';
+
+  const romanMap = {
+    XII: '12th', XI: '11th', X: '10th', IX: '9th', VIII: '8th',
+    VII: '7th', VI: '6th', V: '5th', IV: '4th', III: '3rd', II: '2nd', I: '1st'
+  };
+
+  for (const [rom, num] of Object.entries(romanMap)) {
+    const reg = new RegExp(`^(${rom})([\\s-_]*)([a-zA-Z]?)$`, 'i');
+    if (reg.test(s)) {
+      return s.replace(reg, (_, r, sep, sec) => `${num}${sec ? '-' + sec.toUpperCase() : ''}`);
+    }
+  }
+
+  const digitMatch = s.match(/^(\d{1,2})(?:st|nd|rd|th)?[\s-_]*([a-zA-Z]?)$/i);
+  if (digitMatch) {
+    const num = digitMatch[1];
+    const sec = digitMatch[2] ? `-${digitMatch[2].toUpperCase()}` : '';
+    const suffix = (n) => {
+      if (n === '1') return '1st';
+      if (n === '2') return '2nd';
+      if (n === '3') return '3rd';
+      return `${n}th`;
+    };
+    return `${suffix(num)}${sec}`;
+  }
+
+  return s;
+};
+

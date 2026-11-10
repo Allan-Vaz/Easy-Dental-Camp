@@ -32,18 +32,25 @@ export const DefaultCartoonMascotSVG = () => (
   </svg>
 );
 
-export const A5ReportCard = ({ student, camp, group, diagnosesList = [] }) => {
+export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicProfile }) => {
   const exam = student?.exam || { teeth: {}, flags: [], severity: 'G', noteCode: 'HEALTHY' };
   const resolvedRules = resolveClassRules(camp, student?.groupId || group?.id);
   const teethPerQuad = resolvedRules.teethPerQuad || group?.teethPerQuad || 6;
   const voucherCode = `${camp?.campCode || 'CAMP'}-${student?.groupId}-${student?.rollNo}`;
 
+  // Clinic branding derived from Master Clinic Profile (with camp fallback)
+  const clinicPhone = clinicProfile?.phone || camp?.clinicPhone || '9545660336';
+  const clinicAddress = clinicProfile?.clinicAddress || camp?.clinicAddress || 'Trinity Plaza, Morba Road, Mangaon, Raigad';
+  const clinicName = clinicProfile?.clinicName || 'AVM SMILES DENTAL WELLNESS';
+  const clinicLogo = clinicProfile?.clinicLogoData || camp?.avmLogoData;
+  const doctorStamp = clinicProfile?.doctorSignData;
+
   // WhatsApp Link
-  const cleanPhone = (camp?.clinicPhone || '9545660336').replace(/\D/g, '');
+  const cleanPhone = clinicPhone.replace(/\D/g, '');
   const waPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-  const waMessage = `Hello AVM Smiles Dental Clinic, I received the School Dental Report Card for ${student?.name} (Class ${student?.groupId}, Roll No ${student?.rollNo}, Voucher: ${voucherCode}) and want to book the Free Family Consultation & 50% Off Scaling offer.`;
-  const targetWaUrl = camp?.whatsappCustomUrl?.trim()
-    ? camp.whatsappCustomUrl.trim()
+  const waMessage = `Hello ${clinicName}, I received the School Dental Report Card for ${student?.name} (Class ${student?.groupId}, Roll No ${student?.rollNo}, Voucher: ${voucherCode}) and want to book the Free Family Consultation & 50% Off Scaling offer.`;
+  const targetWaUrl = clinicProfile?.customWaUrl?.trim() || camp?.whatsappCustomUrl?.trim()
+    ? (clinicProfile?.customWaUrl || camp?.whatsappCustomUrl).trim()
     : `https://wa.me/${waPhone}?text=${encodeURIComponent(waMessage)}`;
 
   // In-Browser Local QR Code Generation (Zero rate limits, works 100% offline)
@@ -121,13 +128,13 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [] }) => {
             </div>
           </div>
 
-          {/* Right: AVM Smiles Clinic Logo */}
+          {/* Right: Clinic Logo */}
           <div className="col-span-5 bg-white px-2.5 py-1.5 flex items-center justify-end gap-2 border-l-4 border-[#E52629]">
             <span className="text-[9px] font-bold text-slate-500 italic">with</span>
-            {camp?.avmLogoData ? (
+            {clinicLogo ? (
               <img
-                src={camp.avmLogoData}
-                alt="AVM Smiles Logo"
+                src={clinicLogo}
+                alt="Clinic Logo"
                 className="max-h-10 max-w-[125px] object-contain"
               />
             ) : (
@@ -287,10 +294,14 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [] }) => {
                 </p>
               </div>
               <div className="w-24 border border-dashed border-[#1B2F5A] rounded p-1 text-center bg-white shrink-0">
-                <div className="text-[9.5px] font-serif italic text-[#1B2F5A] font-black truncate">
-                  {exam.checkedBy || 'AVM Smiles'}
-                </div>
-                <div className="text-[6.8px] text-slate-500 font-bold leading-tight">
+                {doctorStamp ? (
+                  <img src={doctorStamp} alt="Stamp" className="max-h-7 max-w-full object-contain mx-auto" />
+                ) : (
+                  <div className="text-[9.5px] font-serif italic text-[#1B2F5A] font-black truncate">
+                    {exam.checkedBy || clinicProfile?.doctorName || 'Dr. Kunal Shet'}
+                  </div>
+                )}
+                <div className="text-[6.8px] text-slate-500 font-bold leading-tight mt-0.5">
                   Doctor Sign / Stamp
                 </div>
               </div>
@@ -313,10 +324,11 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [] }) => {
         <div className="bg-[#1B2F5A] text-white px-3 py-1.5 flex items-center justify-between gap-2 border-b-2 border-[#E52629] shrink-0">
           <div className="min-w-0 flex-1">
             <div className="text-[15px] font-black text-white tracking-tight leading-tight truncate">
-              {camp?.offerTextMarathi || 'मोफत कुटुंब तपासणी + ५०% सूट!'}
+              {camp?.offerTextMarathi || clinicProfile?.defaultOfferMarathi || 'मोफत कुटुंब तपासणी + ५०% सूट!'}
             </div>
             <div className="text-[10px] font-extrabold text-amber-300 leading-tight truncate">
               {camp?.offerTextEnglish ||
+                clinicProfile?.defaultOfferEnglish ||
                 'FREE Family Consultation + 50% OFF Scaling & Cleaning for entire family'}
             </div>
           </div>
@@ -351,13 +363,13 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [] }) => {
           {/* Clinic Address & Hours */}
           <div className="col-span-6 pl-1 leading-tight text-slate-800">
             <div className="text-[11px] font-black text-[#1B2F5A]">
-              AVM SMILES DENTAL WELLNESS
+              {clinicName}
             </div>
-            <div className="text-[8.5px] font-bold text-slate-600 mt-0.5">
-              {camp?.clinicAddress || 'Trinity Plaza, Morba Road, Mangaon, Raigad'}
+            <div className="text-[8.5px] font-bold text-slate-600 mt-0.5 truncate">
+              {clinicAddress}
             </div>
             <div className="text-[9px] font-black text-[#E52629] mt-0.5">
-              Direct Call / WA: +91 {camp?.clinicPhone || '9545660336'}
+              Direct Call / WA: +91 {clinicPhone}
             </div>
             <div className="text-[7.5px] text-slate-500 font-semibold">
               Time: 10:00 AM - 8:00 PM (Monday - Saturday)

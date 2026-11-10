@@ -24,7 +24,8 @@ import {
   DEFAULT_RULE_GROUPS,
   DEFAULT_STAFF,
   INITIAL_CAMPS,
-  INITIAL_PATIENTS
+  INITIAL_PATIENTS,
+  DEFAULT_CLINIC_PROFILE
 } from './data/defaultData';
 import { resolveClassRules } from './utils/clinicalEvaluator';
 import { parseRosterFile } from './utils/rosterParser';
@@ -32,18 +33,26 @@ import { ToothPad } from './components/ToothPad';
 import { PaperGridEntry } from './components/PaperGridEntry';
 import { A5ReportCard, DefaultAvmLogoBadge, DefaultCartoonMascotSVG } from './components/A5ReportCard';
 import { PrincipalAuditView } from './components/PrincipalAuditView';
+import { ClinicSettingsModal } from './components/ClinicSettingsModal';
+import { OnboardingWizard } from './components/OnboardingWizard';
 
 export default function App() {
   const [fbUser, setFbUser] = useState(null);
   const [syncStatus, setSyncStatus] = useState(isFirebaseConfigured ? 'syncing' : 'local');
 
   // Application Data State (Loaded from LocalStorage or pre-seeded defaults)
+  const [clinicProfile, setClinicProfile] = useState(() => loadLocalFallback('CLINIC_PROFILE', DEFAULT_CLINIC_PROFILE));
   const [staffList, setStaffList] = useState(() => loadLocalFallback('STAFF', DEFAULT_STAFF));
   const [camps, setCamps] = useState(() => loadLocalFallback('CAMPS', INITIAL_CAMPS));
   const [patients, setPatients] = useState(() => loadLocalFallback('PATIENTS', INITIAL_PATIENTS));
   const [diagnosesList, setDiagnosesList] = useState(() => loadLocalFallback('DIAGNOSES', DEFAULT_DIAGNOSES));
+  const [isClinicModalOpen, setIsClinicModalOpen] = useState(false);
 
   // Auto-save to LocalStorage on every change for 100% offline persistence
+  useEffect(() => {
+    saveLocalFallback('CLINIC_PROFILE', clinicProfile);
+  }, [clinicProfile]);
+
   useEffect(() => {
     saveLocalFallback('STAFF', staffList);
   }, [staffList]);
@@ -140,6 +149,13 @@ export default function App() {
     const patientsCol = collection(db, 'patients');
     const staffCol = collection(db, 'staff_users');
     const diagCol = collection(db, 'diagnoses');
+    const clinicDoc = doc(db, 'clinic_settings', 'default_profile');
+
+    const unsubClinic = onSnapshot(clinicDoc, (snap) => {
+      if (snap.exists()) {
+        setClinicProfile(snap.data());
+      }
+    });
 
     const unsubCamps = onSnapshot(campsCol, (snap) => {
       if (!snap.empty) {
@@ -167,6 +183,7 @@ export default function App() {
     });
 
     return () => {
+      unsubClinic();
       unsubCamps();
       unsubPatients();
       unsubStaff();
@@ -175,6 +192,18 @@ export default function App() {
   }, [fbUser]);
 
   // Persistence Helpers
+  const saveClinicProfile = async (newProfile) => {
+    setClinicProfile(newProfile);
+    saveLocalFallback('CLINIC_PROFILE', newProfile);
+    if (isFirebaseConfigured && fbUser && db) {
+      try {
+        await setDoc(doc(db, 'clinic_settings', 'default_profile'), newProfile);
+      } catch (e) {
+        console.warn('Firestore clinic profile save error:', e);
+      }
+    }
+  };
+
   const saveCampRecord = async (campObj) => {
     setCamps((prev) => {
       const exists = prev.some((c) => c.id === campObj.id);
@@ -457,6 +486,33 @@ export default function App() {
     }
   };
 
+  // Create Camp from Guided Onboarding Wizard
+  const handleCreateCampFromWizard = async (newCampObj, parsedStudents = []) => {
+    await saveCampRecord(newCampObj);
+
+    const newPatientRecords = parsedStudents.map((stu, idx) => ({
+      id: `${newCampObj.id}_${stu.groupId}_${stu.rollNo || idx + 1}_${Date.now().toString().slice(-4)}_${idx}`,
+      campId: newCampObj.id,
+      groupId: stu.groupId,
+      rollNo: stu.rollNo || idx + 1,
+      name: stu.name,
+      age: stu.age || 10,
+      gender: stu.gender || 'M',
+      status: 'pending',
+      exam: { teeth: {}, flags: [], severity: 'G', noteCode: 'HEALTHY', customNote: '' }
+    }));
+
+    setPatients((prev) => [...prev, ...newPatientRecords]);
+    newPatientRecords.forEach((p) => savePatientRecord(p));
+
+    setSelectedCampId(newCampObj.id);
+    if (newCampObj.groups?.length > 0) {
+      setSelectedGroupId(newCampObj.groups[0].id);
+    }
+    setActiveTab('checkup');
+    showToast(`Successfully launched camp for "${newCampObj.instituteName}" with ${newPatientRecords.length} students!`);
+  };
+
   // Create New Camp
   const handleCreateNewCamp = (e) => {
     e.preventDefault();
@@ -668,7 +724,7 @@ export default function App() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-sm font-black tracking-tight">AVM SMILES DENTAL CAMP</h1>
+                <h1 className="text-sm font-black tracking-tight">{clinicProfile?.clinicName || 'AVM SMILES DENTAL CAMP'}</h1>
                 <span
                   className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
                     syncStatus === 'synced'
@@ -679,9 +735,20 @@ export default function App() {
                   {isFirebaseConfigured ? (syncStatus === 'synced' ? '● Cloud Synced' : '○ Syncing...') : '● Offline Auto-Save'}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-300 font-medium">
-                {activeCamp?.instituteName} ({activeCamp?.campCode})
-              </p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-[10px] text-amber-300 font-extrabold uppercase tracking-wider">Active School:</span>
+                <select
+                  value={selectedCampId}
+                  onChange={(e) => setSelectedCampId(e.target.value)}
+                  className="bg-white/10 hover:bg-white/20 text-white font-bold text-xs px-2 py-0.5 rounded border border-white/20 focus:outline-none cursor-pointer"
+                >
+                  {camps.map((c) => (
+                    <option key={c.id} value={c.id} className="text-slate-900 font-bold">
+                      {c.instituteName} ({c.campCode})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
@@ -719,8 +786,18 @@ export default function App() {
                       : 'text-slate-200 hover:bg-white/10'
                   }`}
                 >
-                  <Building2 className="w-4 h-4" />
-                  <span>Camp Onboarding</span>
+                  <Plus className="w-4 h-4 text-emerald-400" />
+                  <span>Onboard School</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsClinicModalOpen(true)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition text-amber-300 bg-amber-400/10 hover:bg-amber-400/20 border border-amber-300/30"
+                  title="Configure Clinic Address, Phone, WhatsApp, Logo & Stamp"
+                >
+                  <Building2 className="w-4 h-4 text-amber-300" />
+                  <span>Clinic Profile</span>
                 </button>
 
                 <button
@@ -1053,6 +1130,7 @@ export default function App() {
                       camp={activeCamp}
                       group={activeGroup}
                       diagnosesList={diagnosesList}
+                      clinicProfile={clinicProfile}
                     />
                   ))}
                 </div>
@@ -1063,204 +1141,21 @@ export default function App() {
               activeCamp={activeCamp}
               campPatients={campPatients}
               diagnosesList={diagnosesList}
+              clinicProfile={clinicProfile}
             />
           )}
         </main>
       )}
 
-      {/* TAB 3: ONBOARDING & ROSTER IMPORT */}
+      {/* TAB 3: ONBOARDING WIZARD */}
       {activeTab === 'onboarding' && currentUser.role === 'admin' && (
-        <main className="max-w-7xl w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-6 no-print">
-          <div className="lg:col-span-7 space-y-6">
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                <div>
-                  <h2 className="text-base font-black text-[#1B2F5A]">
-                    Camp Address & Voucher Settings
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    Updates reflect immediately on A5 report cards & vouchers.
-                  </p>
-                </div>
-                <span className="px-2.5 py-1 rounded-lg bg-[#1B2F5A] text-white font-mono text-xs font-bold">
-                  Code: {activeCamp?.campCode}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    School / Institute Name
-                  </label>
-                  <input
-                    type="text"
-                    value={activeCamp?.instituteName || ''}
-                    onChange={(e) =>
-                      saveCampRecord({ ...activeCamp, instituteName: e.target.value })
-                    }
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Camp Date</label>
-                  <input
-                    type="date"
-                    value={activeCamp?.campDate || ''}
-                    onChange={(e) => saveCampRecord({ ...activeCamp, campDate: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-semibold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#E52629] mb-1">
-                    Voucher Expiry Date
-                  </label>
-                  <input
-                    type="date"
-                    value={activeCamp?.voucherExpiryDate || ''}
-                    onChange={(e) =>
-                      saveCampRecord({ ...activeCamp, voucherExpiryDate: e.target.value })
-                    }
-                    className="w-full px-3.5 py-2 rounded-xl border border-red-300 bg-red-50/40 text-sm font-bold text-red-900"
-                  />
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Clinic WhatsApp Phone
-                  </label>
-                  <input
-                    type="text"
-                    value={activeCamp?.clinicPhone || ''}
-                    onChange={(e) => saveCampRecord({ ...activeCamp, clinicPhone: e.target.value })}
-                    placeholder="9545660336"
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-bold"
-                  />
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Complete Clinic Address
-                  </label>
-                  <input
-                    type="text"
-                    value={activeCamp?.clinicAddress || ''}
-                    onChange={(e) =>
-                      saveCampRecord({ ...activeCamp, clinicAddress: e.target.value })
-                    }
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-bold"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Robust Excel / CSV Upload */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
-              <div>
-                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <FileSpreadsheet className="w-5 h-5 text-teal-600" />
-                  <span>Batch Import Student Roster (Excel / CSV)</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Directly upload school Excel (.xlsx, .xls) or CSV files. Automatically recognizes
-                  columns like Class, Roll No, Name (English/मराठी), Age, and Gender.
-                </p>
-              </div>
-
-              <label className="border-2 border-dashed border-teal-400 bg-teal-50/40 hover:bg-teal-50 transition rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer text-center">
-                <Upload className="w-8 h-8 text-teal-600 mb-2" />
-                <span className="text-sm font-extrabold text-teal-950">
-                  Click to Upload Excel (.xlsx) or CSV Roster
-                </span>
-                <span className="text-xs text-slate-500 mt-1">
-                  Handles quoted names with commas and Marathi script
-                </span>
-                <input
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  onChange={handleRosterFileUpload}
-                  className="hidden"
-                />
-              </label>
-            </div>
-          </div>
-
-          {/* Onboard New Camp */}
-          <div className="lg:col-span-5 bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4 h-fit">
-            <div className="border-b border-slate-200 pb-3">
-              <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-teal-600" />
-                <span>Onboard New School / Camp</span>
-              </h2>
-              <p className="text-xs text-slate-500">
-                Create a separate workspace for another school or college.
-              </p>
-            </div>
-
-            <form onSubmit={handleCreateNewCamp} className="space-y-3.5">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Institute Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newCampForm.instituteName}
-                  onChange={(e) =>
-                    setNewCampForm({ ...newCampForm, instituteName: e.target.value })
-                  }
-                  placeholder="e.g. KES High School, Mangaon"
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-semibold"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Short Camp Code *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newCampForm.campCode}
-                    onChange={(e) => setNewCampForm({ ...newCampForm, campCode: e.target.value })}
-                    placeholder="e.g. KES"
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-mono font-bold uppercase"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Camp Date</label>
-                  <input
-                    type="date"
-                    value={newCampForm.campDate}
-                    onChange={(e) => setNewCampForm({ ...newCampForm, campDate: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm font-semibold"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Classes / Sections (Comma-separated)
-                </label>
-                <input
-                  type="text"
-                  value={newCampForm.groupsInput}
-                  onChange={(e) => setNewCampForm({ ...newCampForm, groupsInput: e.target.value })}
-                  placeholder="1st-A, 2nd-A, 4th-B, 8th-A"
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-semibold"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 rounded-xl bg-[#1B2F5A] hover:bg-slate-800 text-white font-black text-xs shadow-md transition"
-              >
-                Create New Camp Workspace
-              </button>
-            </form>
-          </div>
+        <main className="max-w-7xl w-full mx-auto p-4 no-print">
+          <OnboardingWizard
+            clinicProfile={clinicProfile}
+            onCreateCamp={handleCreateCampFromWizard}
+            showToast={showToast}
+            onCancel={() => setActiveTab('checkup')}
+          />
         </main>
       )}
 
@@ -1365,6 +1260,14 @@ export default function App() {
           </div>
         </main>
       )}
+      {/* Clinic Master Profile Settings Modal */}
+      <ClinicSettingsModal
+        isOpen={isClinicModalOpen}
+        onClose={() => setIsClinicModalOpen(false)}
+        clinicProfile={clinicProfile}
+        onSaveClinicProfile={saveClinicProfile}
+        showToast={showToast}
+      />
     </div>
   );
 }

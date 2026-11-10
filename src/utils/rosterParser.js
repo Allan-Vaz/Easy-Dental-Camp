@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { normalizeClassName } from './clinicalEvaluator';
 
 /**
  * Robust School Roster Parser
@@ -48,11 +49,12 @@ export const parseRosterFile = async (file) => {
 
         const students = [];
         const detectedClasses = new Set();
+        const rollTracker = new Map(); // Map<className, Set<rollNo>>
+        let duplicateRollWarnings = 0;
 
         const dataRows = rawRows.slice(headerRowIndex + 1);
 
         dataRows.forEach((row, rowIdx) => {
-          // If no content in row, skip
           if (!row || row.every((c) => !String(c).trim())) return;
 
           let rawClass = classIdx !== -1 ? String(row[classIdx] || '').trim() : '';
@@ -61,15 +63,15 @@ export const parseRosterFile = async (file) => {
           let rawAge = ageIdx !== -1 ? Number(row[ageIdx]) : null;
           let rawGender = genderIdx !== -1 ? String(row[genderIdx] || '').trim().toUpperCase() : '';
 
-          // Fallback if header detection was ambiguous: treat col 0 as class, 1 as roll, 2 as name
           if (!rawClass && row[0]) rawClass = String(row[0]).trim();
           if (!rawRoll && row[1]) rawRoll = String(row[1]).trim();
           if (!rawName && row[2]) rawName = String(row[2]).trim();
 
-          if (!rawClass) rawClass = 'General';
           if (!rawName) return; // Skip rows without student name
 
-          detectedClasses.add(rawClass);
+          // Harmonize class name
+          const standardizedClass = normalizeClassName(rawClass);
+          detectedClasses.add(standardizedClass);
 
           // Standardize gender
           let gender = 'M';
@@ -77,9 +79,29 @@ export const parseRosterFile = async (file) => {
             gender = 'F';
           }
 
+          // Track and auto-correct duplicate or missing rolls
+          if (!rollTracker.has(standardizedClass)) {
+            rollTracker.set(standardizedClass, new Set());
+          }
+          const existingRolls = rollTracker.get(standardizedClass);
+
+          let rollNo = Number(rawRoll);
+          if (!rollNo || isNaN(rollNo) || rollNo <= 0) {
+            rollNo = existingRolls.size + 1;
+          } else if (existingRolls.has(rollNo)) {
+            duplicateRollWarnings++;
+            // Find next available roll number in this class
+            let nextAvailable = 1;
+            while (existingRolls.has(nextAvailable)) {
+              nextAvailable++;
+            }
+            rollNo = nextAvailable;
+          }
+          existingRolls.add(rollNo);
+
           students.push({
-            groupId: rawClass,
-            rollNo: Number(rawRoll) || (rowIdx + 1),
+            groupId: standardizedClass,
+            rollNo,
             name: rawName,
             age: rawAge && !isNaN(rawAge) ? rawAge : 10,
             gender
@@ -88,7 +110,8 @@ export const parseRosterFile = async (file) => {
 
         resolve({
           students,
-          classes: Array.from(detectedClasses)
+          classes: Array.from(detectedClasses).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+          duplicateRollWarnings
         });
       } catch (err) {
         reject(err);
@@ -99,3 +122,4 @@ export const parseRosterFile = async (file) => {
     reader.readAsArrayBuffer(file);
   });
 };
+

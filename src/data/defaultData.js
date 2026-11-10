@@ -279,3 +279,20 @@ export const INITIAL_PATIENTS = [
     }
   }
 ];
+
+export const DEFAULT_CLINIC_PROFILE = {
+  id: 'clinic_avm_smiles',
+  clinicName: 'AVM Smiles Dental Wellness',
+  clinicAddress: 'Trinity Plaza, Morba Road, Mangaon, Raigad, Maharashtra',
+  phone: '9545660336',
+  whatsappNumber: '9545660336',
+  customWaUrl: '',
+  clinicLogoData: '',
+  doctorSignData: '',
+  doctorName: 'Dr. Kunal Shet',
+  doctorRegNo: 'Reg. No. A-28491',
+  defaultOfferMarathi: 'मोफत कुटुंब तपासणी + ५०% सूट!',
+  defaultOfferEnglish: 'FREE Family Consultation + 50% OFF Scaling & Cleaning for entire family',
+  defaultVoucherDays: 30
+};
+
