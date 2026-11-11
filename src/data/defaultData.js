@@ -293,11 +293,14 @@ export const DEFAULT_CLINIC_PROFILE = {
   doctorRegNo: 'Reg. No. A-28491',
   defaultOfferMarathi: 'मोफत कुटुंब तपासणी + ५०% सूट!',
   defaultOfferEnglish: 'FREE Family Consultation + 50% OFF Scaling & Cleaning for entire family',
+  defaultOfferEnglishLine1: 'FREE Family Consultation',
+  defaultOfferEnglishLine2: '+ 50% OFF Scaling & Cleaning for entire family',
   defaultVoucherDays: 30,
   voucherPromoImageData: '',
   addressLine1: 'First Floor, Trinity Plaza',
   addressLine2: 'Morba Road, Mangaon',
   addressLine3: 'Raigad, Maharashtra',
-  googleReviewsText: '4.8 Stars on Google Reviews'
+  googleReviewsText: '4.8 Stars on Google Reviews',
+  workingHours: '10:00 AM - 8:00 PM (Monday - Saturday)'
 };
 

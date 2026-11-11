@@ -143,16 +143,28 @@ export const ClinicSettingsModal = ({
             </div>
           </div>
 
-          {/* Google Reviews */}
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">Google Reviews Rating Text (Printed on Voucher)</label>
-            <input
-              type="text"
-              value={form.googleReviewsText ?? '4.8 Stars on Google Reviews'}
-              onChange={(e) => setForm({ ...form, googleReviewsText: e.target.value })}
-              placeholder="4.8 Stars on Google Reviews"
-              className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-[#1B2F5A]"
-            />
+          {/* Google Reviews & Working Hours */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Google Reviews Rating Text (Voucher Badge)</label>
+              <input
+                type="text"
+                value={form.googleReviewsText ?? '4.8 Stars on Google Reviews'}
+                onChange={(e) => setForm({ ...form, googleReviewsText: e.target.value })}
+                placeholder="4.8 Stars on Google Reviews"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-[#1B2F5A]"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Clinic Working Hours / Timings</label>
+              <input
+                type="text"
+                value={form.workingHours ?? '10:00 AM - 8:00 PM (Monday - Saturday)'}
+                onChange={(e) => setForm({ ...form, workingHours: e.target.value })}
+                placeholder="10:00 AM - 8:00 PM (Monday - Saturday)"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium"
+              />
+            </div>
           </div>
 
           {/* Default Voucher Offers */}
@@ -170,14 +182,27 @@ export const ClinicSettingsModal = ({
                 className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold"
               />
             </div>
-            <div>
-              <label className="block text-slate-600 mb-1">Sub-Offer Description (English)</label>
-              <input
-                type="text"
-                value={form.defaultOfferEnglish}
-                onChange={(e) => setForm({ ...form, defaultOfferEnglish: e.target.value })}
-                className="w-full px-3 py-1.5 rounded-lg border border-slate-300"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="block text-slate-600 mb-1">English Offer - Line 1 (Large Bold White)</label>
+                <input
+                  type="text"
+                  value={form.defaultOfferEnglishLine1 ?? 'FREE Family Consultation'}
+                  onChange={(e) => setForm({ ...form, defaultOfferEnglishLine1: e.target.value })}
+                  placeholder="FREE Family Consultation"
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold text-[#1B2F5A]"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-600 mb-1">English Offer - Line 2 (Subhead)</label>
+                <input
+                  type="text"
+                  value={form.defaultOfferEnglishLine2 ?? '+ 50% OFF Scaling & Cleaning for entire family'}
+                  onChange={(e) => setForm({ ...form, defaultOfferEnglishLine2: e.target.value })}
+                  placeholder="+ 50% OFF Scaling & Cleaning for entire family"
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300"
+                />
+              </div>
             </div>
             <div>
               <label className="block text-slate-600 mb-1">Default Voucher Validity (Days from Camp)</label>

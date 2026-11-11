@@ -385,57 +385,68 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicP
 
             {/* Left Side: 3 Horizontal Sub-segments */}
             <div className="flex-1 min-w-0 h-full flex flex-col justify-between py-0.5 relative z-10 pr-1">
-              {/* Horizontal Sub-segment 1: Marathi Promotional Line (Large, 3D text shadow, pops, takes entire space) */}
+              {/* Horizontal Sub-segment 1: Marathi Promotional Line (Vibrant Crimson Red 3D Shadow) */}
               <div className="flex-1 flex items-center min-h-0">
                 <div
-                  className="text-[20px] font-black text-[#FEF08A] tracking-tight leading-tight line-clamp-2"
+                  className="text-[21px] font-black text-[#FEF08A] tracking-tight leading-tight line-clamp-2"
                   style={{
-                    textShadow: '2px 2px 0px #091222, 3px 3px 0px #000000, 4px 4px 6px rgba(0,0,0,0.85)'
+                    textShadow: '2px 2px 0px #b91c1c, 4px 4px 0px #7f1d1d, 0 0 16px rgba(254,240,138,0.45)'
                   }}
                 >
                   {camp?.offerTextMarathi || clinicProfile?.defaultOfferMarathi || 'मोफत कुटुंब तपासणी + ५०% सूट!'}
                 </div>
               </div>
 
-              {/* Horizontal Sub-segment 2: English Promotional Line (White, 3D text shadow) */}
-              <div className="flex-1 flex items-center min-h-0">
+              {/* Horizontal Sub-segment 2: English Promotional Line (2 Dedicated Lines with Royal Cobalt 3D Shadow) */}
+              <div className="flex-1 flex flex-col justify-center min-h-0 py-0.5">
                 <div
-                  className="text-[12.5px] font-black text-white tracking-wide leading-tight line-clamp-2"
+                  className="text-[15.5px] font-black text-white tracking-wide leading-tight truncate"
                   style={{
-                    textShadow: '1.5px 1.5px 0px #091222, 2.5px 2.5px 0px #000000, 3px 3px 5px rgba(0,0,0,0.85)'
+                    textShadow: '1.5px 1.5px 0px #0e244d, 3px 3px 0px #071329, 0 2px 8px rgba(0,0,0,0.7)'
                   }}
                 >
-                  {camp?.offerTextEnglish ||
-                    clinicProfile?.defaultOfferEnglish ||
-                    'FREE Family Consultation + 50% OFF Scaling & Cleaning for entire family'}
+                  {clinicProfile?.defaultOfferEnglishLine1 || 'FREE Family Consultation'}
+                </div>
+                <div
+                  className="text-[13.5px] font-extrabold text-amber-200 tracking-wide leading-tight mt-0.5 truncate"
+                  style={{
+                    textShadow: '1.5px 1.5px 0px #0e244d, 3px 3px 0px #071329, 0 2px 8px rgba(0,0,0,0.7)'
+                  }}
+                >
+                  {clinicProfile?.defaultOfferEnglishLine2 || '+ 50% OFF Scaling & Cleaning for entire family'}
                 </div>
               </div>
 
-              {/* Horizontal Sub-segment 3: Valid Till Date Pill (Large, fills height of this segment) */}
+              {/* Horizontal Sub-segment 3: Valid Till Date Pill (Continuous Yellow Background, Stacked Labels, Navy Date) */}
               <div className="flex-1 flex items-center min-h-0 pt-0.5">
-                <div className="w-full h-full max-h-[32px] px-3 rounded-lg bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 text-[#1B2F5A] border-2 border-white shadow-md flex items-center justify-between font-black">
-                  <span className="text-[9.5px] uppercase tracking-wider flex items-center gap-1.5">
-                    <span className="text-xs">📅</span>
-                    <span>सवलत वैधता / OFFER VALID TILL:</span>
-                  </span>
-                  <span className="text-[11px] bg-[#1B2F5A] text-[#FEF08A] px-2 py-0.5 rounded font-mono tracking-wide shadow-xs">
+                <div className="w-full h-full max-h-[36px] px-3.5 py-1 rounded-xl bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300 text-[#1B2F5A] border-2 border-white shadow-lg flex items-center justify-between font-black">
+                  <div className="flex flex-col leading-none">
+                    <span className="text-[9.5px] font-black tracking-tight text-[#1B2F5A] uppercase flex items-center gap-1">
+                      <span>📅</span>
+                      <span>सवलत वैधता</span>
+                    </span>
+                    <span className="text-[7.5px] font-black text-[#1B2F5A]/85 uppercase tracking-wider mt-0.5">
+                      OFFER VALID TILL:
+                    </span>
+                  </div>
+                  <div className="text-[14px] font-black text-[#1B2F5A] font-mono tracking-wide">
                     {formatDisplayDate(camp?.voucherExpiryDate)}
-                  </span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Right Side: 4:3 Aspect Ratio Promotional Graphic (No Cropping) */}
-            <div className="h-full aspect-[4/3] max-w-[44%] shrink-0 flex items-center justify-center relative z-10">
-              <div className="w-full h-full rounded-xl overflow-hidden border-2 border-white/60 shadow-xl bg-slate-950/40 flex items-center justify-center p-0.5">
+            {/* Right Side: 1:1 Square Aspect Ratio Photo (Borderless & Cohesive Soft Glow) */}
+            <div className="h-full aspect-square max-w-[42%] shrink-0 flex items-center justify-center relative z-10">
+              <div className="w-full h-full rounded-2xl overflow-hidden shadow-[0_10px_25px_rgba(0,0,0,0.5),0_0_20px_rgba(229,38,41,0.25)] flex items-center justify-center bg-transparent">
                 {voucherPromoGraphic ? (
                   <img
                     src={voucherPromoGraphic}
                     alt="Family Smiles"
-                    className="w-full h-full object-contain"
+                    className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-gradient-to-br from-[#E52629] to-[#991b1b] text-white text-center">
+                  <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-gradient-to-br from-[#E52629] to-[#991b1b] text-white text-center rounded-2xl">
                     <DefaultCartoonMascotSVG />
                     <span className="text-[8px] font-bold mt-1 text-white/90">Healthy Family Smiles</span>
                   </div>
@@ -463,7 +474,7 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicP
               </div>
             </div>
 
-            {/* Center: Authoritative Clinic Details with Google Reviews & 3-Line Address */}
+            {/* Center: Authoritative Clinic Details with Google Reviews, 3-Line Address & Working Hours */}
             <div className="text-center px-1 flex-1 min-w-0 leading-tight relative z-10 flex flex-col items-center justify-center">
               {/* Clinic Name */}
               <div className="text-[12.5px] font-black text-white uppercase tracking-tight drop-shadow-sm truncate">
@@ -481,6 +492,12 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicP
                 <div>{clinicProfile?.addressLine1 || 'First Floor, Trinity Plaza'}</div>
                 <div>{clinicProfile?.addressLine2 || 'Morba Road, Mangaon'}</div>
                 <div>{clinicProfile?.addressLine3 || 'Raigad, Maharashtra'}</div>
+              </div>
+
+              {/* Working Hours */}
+              <div className="text-[7.5px] font-bold text-amber-200 mt-0.5 flex items-center justify-center gap-1">
+                <span>🕒 Timing:</span>
+                <span>{clinicProfile?.workingHours || '10:00 AM - 8:00 PM (Monday - Saturday)'}</span>
               </div>
 
               {/* Call / WhatsApp Number Pill */}
