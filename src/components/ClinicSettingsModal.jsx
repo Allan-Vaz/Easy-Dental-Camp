@@ -106,16 +106,52 @@ export const ClinicSettingsModal = ({
             </div>
           </div>
 
-          {/* Full Clinic Address */}
+          {/* Full Clinic Address & 3-Line Voucher Breakdown */}
+          <div className="space-y-2 p-3 bg-slate-50/70 rounded-xl border border-slate-200">
+            <label className="block font-bold text-slate-700">Clinic Address (Printed in 3 Lines on Voucher) *</label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <span className="text-[10px] text-slate-500 font-bold block mb-0.5">Line 1 (Building / Floor)</span>
+                <input
+                  type="text"
+                  value={form.addressLine1 ?? 'First Floor, Trinity Plaza'}
+                  onChange={(e) => setForm({ ...form, addressLine1: e.target.value })}
+                  placeholder="First Floor, Trinity Plaza"
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-medium text-xs"
+                />
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 font-bold block mb-0.5">Line 2 (Street / Area)</span>
+                <input
+                  type="text"
+                  value={form.addressLine2 ?? 'Morba Road, Mangaon'}
+                  onChange={(e) => setForm({ ...form, addressLine2: e.target.value })}
+                  placeholder="Morba Road, Mangaon"
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-medium text-xs"
+                />
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 font-bold block mb-0.5">Line 3 (District / State)</span>
+                <input
+                  type="text"
+                  value={form.addressLine3 ?? 'Raigad, Maharashtra'}
+                  onChange={(e) => setForm({ ...form, addressLine3: e.target.value })}
+                  placeholder="Raigad, Maharashtra"
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-medium text-xs"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Google Reviews */}
           <div>
-            <label className="block font-bold text-slate-700 mb-1">Complete Clinic Address *</label>
+            <label className="block font-bold text-slate-700 mb-1">Google Reviews Rating Text (Printed on Voucher)</label>
             <input
               type="text"
-              required
-              value={form.clinicAddress}
-              onChange={(e) => setForm({ ...form, clinicAddress: e.target.value })}
-              placeholder="Trinity Plaza, Morba Road, Mangaon, Raigad"
-              className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium"
+              value={form.googleReviewsText ?? '4.8 Stars on Google Reviews'}
+              onChange={(e) => setForm({ ...form, googleReviewsText: e.target.value })}
+              placeholder="4.8 Stars on Google Reviews"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-[#1B2F5A]"
             />
           </div>
 

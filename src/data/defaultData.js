@@ -294,6 +294,10 @@ export const DEFAULT_CLINIC_PROFILE = {
   defaultOfferMarathi: 'मोफत कुटुंब तपासणी + ५०% सूट!',
   defaultOfferEnglish: 'FREE Family Consultation + 50% OFF Scaling & Cleaning for entire family',
   defaultVoucherDays: 30,
-  voucherPromoImageData: ''
+  voucherPromoImageData: '',
+  addressLine1: 'First Floor, Trinity Plaza',
+  addressLine2: 'Morba Road, Mangaon',
+  addressLine3: 'Raigad, Maharashtra',
+  googleReviewsText: '4.8 Stars on Google Reviews'
 };
 
