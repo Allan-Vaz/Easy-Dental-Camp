@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronRight, Search } from 'lucide-react';
 import { getToothLabels, evaluateClinicalState } from '../utils/clinicalEvaluator';
-import { ADVICE_TEMPLATES } from '../data/defaultData';
+import { ADVICE_TEMPLATES, DEFAULT_TOOTH_DIAGNOSES } from '../data/defaultData';
 
 export const ToothPad = ({
   activeCamp,
@@ -17,12 +17,19 @@ export const ToothPad = ({
   updateActivePatientExam,
   savePatientRecord,
   showToast,
-  diagnosesList = []
+  diagnosesList = [],
+  toothDiagnosesList = []
 }) => {
   const [activeToothPopover, setActiveToothPopover] = useState(null);
 
   const teethPerQuad = activeGroup?.teethPerQuad || 6;
   const labels = getToothLabels(teethPerQuad);
+
+  const allToothDiags = toothDiagnosesList && toothDiagnosesList.length > 0
+    ? toothDiagnosesList
+    : DEFAULT_TOOTH_DIAGNOSES;
+  const activeToothDiagIds = activeGroup?.activeToothDiagnoses || allToothDiags.map((d) => d.id);
+  const visibleToothDiagnoses = allToothDiags.filter((d) => activeToothDiagIds.includes(d.id));
 
   const setToothStatus = (toothKey, statusValue) => {
     if (!activePatient) return;
@@ -237,19 +244,16 @@ export const ToothPad = ({
                 <label className="text-xs font-black uppercase tracking-wider text-[#1B2F5A]">
                   1. Tap Tooth Box ({teethPerQuad} Teeth per Quadrant • Anatomical View)
                 </label>
-                <div className="flex items-center gap-3 text-[11px] font-bold">
-                  <span className="flex items-center gap-1 text-[#E52629]">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#E52629] inline-block"></span>
-                    Deep Cavity (Red)
-                  </span>
-                  <span className="flex items-center gap-1 text-amber-600">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
-                    Early Decay (Yellow)
-                  </span>
-                  <span className="flex items-center gap-1 text-[#1B2F5A]">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#1B2F5A] inline-block"></span>
-                    Missing (Navy)
-                  </span>
+                <div className="flex items-center gap-2.5 text-[11px] font-bold flex-wrap">
+                  {visibleToothDiagnoses.map((td) => (
+                    <span key={td.id} className="flex items-center gap-1 text-slate-700">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+                        style={{ backgroundColor: td.colorHex || '#E52629' }}
+                      ></span>
+                      <span>{td.name}</span>
+                    </span>
+                  ))}
                 </div>
               </div>
 
@@ -267,80 +271,84 @@ export const ToothPad = ({
                           const tKey = `${quad.q}${lbl}`;
                           const st = activePatient.exam?.teeth?.[tKey];
                           const isPopOpen = activeToothPopover === tKey;
+                          const matchedTd = allToothDiags.find((d) => d.id === st);
 
-                          const badgeStyle =
-                            st === 'C_R'
-                              ? 'bg-[#E52629] text-white border-[#E52629] ring-2 ring-red-300'
-                              : st === 'C_Y'
-                              ? 'bg-amber-400 text-slate-950 border-amber-500 ring-2 ring-amber-200'
-                              : st === 'M'
+                          const badgeStyle = matchedTd
+                            ? matchedTd.id === 'M'
                               ? 'bg-[#1B2F5A] text-white border-[#1B2F5A] ring-2 ring-slate-300'
-                              : st === 'R'
+                              : matchedTd.id === 'C_R'
+                              ? 'bg-[#E52629] text-white border-[#E52629] ring-2 ring-red-300'
+                              : matchedTd.id === 'C_Y'
+                              ? 'bg-amber-400 text-slate-950 border-amber-500 ring-2 ring-amber-200'
+                              : matchedTd.id === 'R'
                               ? 'bg-orange-500 text-white border-orange-600'
-                              : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-300';
+                              : 'text-white'
+                            : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-300';
+
+                          const customStyle = matchedTd && !['M', 'C_R', 'C_Y', 'R'].includes(matchedTd.id)
+                            ? { backgroundColor: matchedTd.colorHex, borderColor: matchedTd.colorHex }
+                            : undefined;
+
+                          const shortLabel = matchedTd
+                            ? matchedTd.id === 'C_R'
+                              ? 'CAV-R'
+                              : matchedTd.id === 'C_Y'
+                              ? 'CAV-Y'
+                              : matchedTd.id === 'M'
+                              ? 'MISS'
+                              : matchedTd.id === 'R'
+                              ? 'MILK'
+                              : matchedTd.name.slice(0, 4).toUpperCase()
+                            : '•';
 
                           return (
                             <div key={tKey} className="relative flex-1">
                               <button
                                 type="button"
                                 onClick={() => setActiveToothPopover(isPopOpen ? null : tKey)}
+                                style={customStyle}
                                 className={`w-full py-2.5 rounded-lg border-2 font-black text-xs transition flex flex-col items-center justify-center ${badgeStyle}`}
                               >
                                 <span>{lbl}</span>
                                 <span className="text-[9px] leading-none mt-0.5 opacity-90">
-                                  {st === 'C_R'
-                                    ? 'CAV-R'
-                                    : st === 'C_Y'
-                                    ? 'CAV-Y'
-                                    : st === 'M'
-                                    ? 'MISS'
-                                    : st === 'R'
-                                    ? 'MILK'
-                                    : '•'}
+                                  {shortLabel}
                                 </span>
                               </button>
 
                               {isPopOpen && (
-                                <div className="absolute z-40 top-full mt-1 left-0 w-44 bg-white rounded-xl shadow-2xl border border-slate-200 p-1.5 space-y-1">
+                                <div className="absolute z-40 top-full mt-1 left-0 w-48 bg-white rounded-xl shadow-2xl border border-slate-200 p-1.5 space-y-1">
                                   <div className="text-[10px] font-black text-slate-400 px-2 py-0.5">
                                     Tooth {tKey} Diagnosis
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setToothStatus(tKey, 'C_R')}
-                                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold bg-red-50 hover:bg-[#E52629] hover:text-white text-[#E52629] flex items-center gap-2"
-                                  >
-                                    <span className="w-2.5 h-2.5 rounded-full bg-[#E52629]"></span>
-                                    <span>Deep Cavity (Red)</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setToothStatus(tKey, 'C_Y')}
-                                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-50 hover:bg-amber-500 hover:text-white text-amber-800 flex items-center gap-2"
-                                  >
-                                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-                                    <span>Early Cavity (Yellow)</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setToothStatus(tKey, 'M')}
-                                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-[#1B2F5A] hover:text-white text-[#1B2F5A] flex items-center gap-2"
-                                  >
-                                    <span className="w-2.5 h-2.5 rounded-full bg-[#1B2F5A]"></span>
-                                    <span>Missing Tooth (Navy)</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setToothStatus(tKey, 'R')}
-                                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold bg-orange-50 hover:bg-orange-500 hover:text-white text-orange-800 flex items-center gap-2"
-                                  >
-                                    <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
-                                    <span>Retained Milk Tooth</span>
-                                  </button>
+                                  {visibleToothDiagnoses.map((td) => (
+                                    <button
+                                      key={td.id}
+                                      type="button"
+                                      onClick={() => setToothStatus(tKey, td.id)}
+                                      className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-100 flex items-center justify-between transition"
+                                    >
+                                      <div className="flex items-center gap-2 truncate">
+                                        <span
+                                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                                          style={{ backgroundColor: td.colorHex || '#E52629' }}
+                                        />
+                                        <span className="truncate text-slate-800">{td.name}</span>
+                                      </div>
+                                      <span
+                                        className={`text-[8.5px] px-1.5 py-0.2 rounded font-black shrink-0 ${
+                                          td.severity === 'Urgent'
+                                            ? 'bg-red-100 text-red-700'
+                                            : 'bg-amber-100 text-amber-800'
+                                        }`}
+                                      >
+                                        {td.severity === 'Urgent' ? 'URG' : 'MED'}
+                                      </span>
+                                    </button>
+                                  ))}
                                   <button
                                     type="button"
                                     onClick={() => setToothStatus(tKey, 'CLEAR')}
-                                    className="w-full text-left px-2.5 py-1 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-slate-100"
+                                    className="w-full text-left px-2.5 py-1 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-slate-100 border-t border-slate-100 mt-1"
                                   >
                                     ✕ Clear / Healthy
                                   </button>
@@ -407,35 +415,74 @@ export const ToothPad = ({
             {/* Advice Template & Note */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Advice Template (Printed on Card)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700">
+                    Advice Template (Printed on Card)
+                  </label>
+                  <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateActivePatientExam((ex) => ({ ...ex, adviceLanguage: 'en' }))
+                      }
+                      className={`px-2 py-0.5 rounded text-[10px] font-black transition ${
+                        (activePatient.exam?.adviceLanguage || 'mr') === 'en'
+                          ? 'bg-[#1B2F5A] text-white shadow'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      🇬🇧 EN
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateActivePatientExam((ex) => ({ ...ex, adviceLanguage: 'mr' }))
+                      }
+                      className={`px-2 py-0.5 rounded text-[10px] font-black transition ${
+                        (activePatient.exam?.adviceLanguage || 'mr') === 'mr'
+                          ? 'bg-[#1B2F5A] text-white shadow'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      🇮🇳 MR
+                    </button>
+                  </div>
+                </div>
+
                 <select
                   value={activePatient.exam?.noteCode || 'HEALTHY'}
                   onChange={(e) =>
                     updateActivePatientExam((ex) => ({ ...ex, noteCode: e.target.value }))
                   }
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white text-[#1B2F5A]"
                 >
                   {Object.values(ADVICE_TEMPLATES).map((tpl) => (
                     <option key={tpl.code} value={tpl.code}>
-                      {tpl.label}
+                      {tpl.label} ({(activePatient.exam?.adviceLanguage || 'mr') === 'en' ? 'English' : 'मराठी'})
                     </option>
                   ))}
                 </select>
+
+                <p className="text-[10.5px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-200 mt-1.5 font-medium leading-relaxed italic">
+                  "{activePatient.exam?.customNote ||
+                    ((activePatient.exam?.adviceLanguage || 'mr') === 'en'
+                      ? (ADVICE_TEMPLATES[activePatient.exam?.noteCode || 'HEALTHY']?.textEn)
+                      : (ADVICE_TEMPLATES[activePatient.exam?.noteCode || 'HEALTHY']?.textMr))}"
+                </p>
               </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Optional Custom Note Override
                 </label>
-                <input
-                  type="text"
+                <textarea
+                  rows={3}
                   value={activePatient.exam?.customNote || ''}
                   onChange={(e) =>
                     updateActivePatientExam((ex) => ({ ...ex, customNote: e.target.value }))
                   }
-                  placeholder="Leave blank to use standard Marathi advice..."
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold"
+                  placeholder={`Leave blank to use selected ${(activePatient.exam?.adviceLanguage || 'mr') === 'en' ? 'English' : 'Marathi'} advice...`}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold bg-white resize-none"
                 />
               </div>
             </div>

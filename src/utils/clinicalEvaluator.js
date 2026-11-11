@@ -26,6 +26,7 @@ export const resolveClassRules = (camp, classId) => {
       ruleGroupId: matchedRG.id,
       ruleGroupName: matchedRG.name,
       teethPerQuad: Number(matchedRG.teethPerQuad) || 6,
+      activeToothDiagnoses: matchedRG.activeToothDiagnoses || ['C_R', 'C_Y', 'M', 'R'],
       activeChecks: matchedRG.activeChecks || ['cavities', 'tartar', 'alignment']
     };
   }
@@ -34,6 +35,7 @@ export const resolveClassRules = (camp, classId) => {
     ruleGroupId: 'UNASSIGNED',
     ruleGroupName: 'Default Class Rules',
     teethPerQuad: Number(fallbackGrp?.teethPerQuad) || 6,
+    activeToothDiagnoses: fallbackGrp?.activeToothDiagnoses || ['C_R', 'C_Y', 'M', 'R'],
     activeChecks: fallbackGrp?.activeChecks || ['cavities', 'tartar', 'alignment']
   };
 };

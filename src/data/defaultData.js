@@ -1,44 +1,85 @@
+export const DEFAULT_TOOTH_DIAGNOSES = [
+  {
+    id: 'C_R',
+    name: 'Deep Cavity',
+    severity: 'Urgent',
+    colorHex: '#E52629',
+    adviceEn: 'Deep cavity detected. Immediate dental filling or root canal consultation advised to prevent pain and tooth loss.',
+    adviceMr: 'तुमच्या पाल्याच्या दातांमध्ये खोल कीड सुरु झाली आहे. पुढील दुखापत व वेदना टाळण्यासाठी वेळीच सिमेंट भरणे (Filling) व उपचाराची गरज आहे.'
+  },
+  {
+    id: 'C_Y',
+    name: 'Early Decay',
+    severity: 'Medium',
+    colorHex: '#f59e0b',
+    adviceEn: 'Early enamel decay noted. Preventive filling and fluoride therapy advised before decay progresses.',
+    adviceMr: 'दातांवर सुरुवातीची कीड आढळली आहे. कीड वाढण्यापूर्वी प्रतिबंधक उपचार (Filling) करून घेणे हिताचे ठरेल.'
+  },
+  {
+    id: 'M',
+    name: 'Missing Tooth',
+    severity: 'Medium',
+    colorHex: '#1B2F5A',
+    adviceEn: 'Missing tooth noted. Consult dentist for space maintainer or permanent tooth eruption check.',
+    adviceMr: 'दात पडलेला / नसलेला आढळला आहे. कायमचा दात वेळेवर येण्यासाठी डॉक्टरांचा सल्ला घ्यावा.'
+  },
+  {
+    id: 'R',
+    name: 'Retained Milk Tooth',
+    severity: 'Medium',
+    colorHex: '#ea580c',
+    adviceEn: 'Mobile or retained primary tooth noted. Pediatric extraction or evaluation advised.',
+    adviceMr: 'दुधाचे दात हलत आहेत किंवा नवीन कायमचे दात येताना जागा कमी पडत आहे. योग्य मार्गदर्शनासाठी डॉक्टरांचा सल्ला घ्यावा.'
+  }
+];
+
 export const DEFAULT_DIAGNOSES = [
   {
     id: 'cavities',
     labelEn: 'Cavities Detected',
     labelMr: 'किडलेले दात',
-    defaultSeverity: 'R',
+    defaultSeverity: 'Urgent',
+    adviceEn: 'Cavities detected. Timely dental filling is recommended to prevent pain and root canal issues.',
     adviceMr: 'तुमच्या पाल्याच्या दातांमध्ये कीड सुरु झाली आहे. पुढील दुखापत व वेदना टाळण्यासाठी वेळीच सिमेंट भरणे (Filling) व उपचाराची गरज आहे.'
   },
   {
     id: 'tartar',
     labelEn: 'Tartar - Cleaning Needed',
     labelMr: 'पिवळे दात / टार्टर',
-    defaultSeverity: 'Y',
+    defaultSeverity: 'Medium',
+    adviceEn: 'Tartar buildup or yellowish plaque noted. Professional scaling and cleaning advised.',
     adviceMr: 'दातांवर पिवळी पुट (Tartar) साचली आहे. क्लिनिकमध्ये येऊन दातांची व्यावसायिक स्वच्छता (Scaling) करून घ्यावी.'
   },
   {
     id: 'alignment',
     labelEn: 'Braces / Alignment Needed',
     labelMr: 'वेडेवाकडे दात',
-    defaultSeverity: 'Y',
+    defaultSeverity: 'Medium',
+    adviceEn: 'Malaligned teeth. Orthodontic consultation for braces/aligners recommended.',
     adviceMr: 'दातांची रचना सरळ करण्यासाठी तज्ज्ञ ऑर्थोडॉन्टिस्टकडून (Braces/Aligners) तपासणी करून घ्यावी.'
   },
   {
     id: 'milk_tooth',
     labelEn: 'Retained / Mobile Milk Tooth',
     labelMr: 'हलणारे दुधाचे दात',
-    defaultSeverity: 'Y',
+    defaultSeverity: 'Medium',
+    adviceEn: 'Mobile or retained milk tooth observed. Pediatric dental consultation advised for proper eruption.',
     adviceMr: 'दुधाचे दात हलत आहेत किंवा नवीन कायमचे दात येताना जागा कमी पडत आहे. योग्य मार्गदर्शनासाठी डॉक्टरांचा सल्ला घ्यावा.'
   },
   {
     id: 'gums',
     labelEn: 'Gum Inflammation / Bleeding',
     labelMr: 'हिरड्यांची सूज / रक्त येणे',
-    defaultSeverity: 'Y',
+    defaultSeverity: 'Medium',
+    adviceEn: 'Gums are inflamed or bleeding on brushing. Proper gingival treatment is recommended.',
     adviceMr: 'हिरड्यांना सूज आहे किंवा ब्रश करताना रक्त येते. हिरड्यांच्या आरोग्यासाठी वेळेवर उपचार घेणे आवश्यक आहे.'
   },
   {
     id: 'stains',
     labelEn: 'Surface Stains / Discoloration',
     labelMr: 'दातांवर डाग',
-    defaultSeverity: 'Y',
+    defaultSeverity: 'Medium',
+    adviceEn: 'Surface discoloration or extrinsic staining noted. Professional polishing is recommended.',
     adviceMr: 'दातांवरील बाह्य डाग काढण्यासाठी पॉलिशिंग व स्वच्छतेची शिफारस केली जाते.'
   }
 ];
@@ -49,6 +90,7 @@ export const DEFAULT_RULE_GROUPS = [
     name: 'Pre-Primary & Early Primary (Kids)',
     classes: ['Nursery', 'JRKG', 'SRKG', '1st-A', '2nd-A'],
     teethPerQuad: 5, // A, B, C, D, E
+    activeToothDiagnoses: ['C_R', 'C_Y', 'R'],
     activeChecks: ['cavities', 'milk_tooth', 'gums']
   },
   {
@@ -56,6 +98,7 @@ export const DEFAULT_RULE_GROUPS = [
     name: 'Upper Primary & Middle School',
     classes: ['3rd-A', '4th-B', '5th-A', '6th-A', '7th-A'],
     teethPerQuad: 6, // 1 to 6
+    activeToothDiagnoses: ['C_R', 'C_Y', 'M', 'R'],
     activeChecks: ['cavities', 'tartar', 'alignment', 'milk_tooth', 'gums']
   },
   {
@@ -63,6 +106,7 @@ export const DEFAULT_RULE_GROUPS = [
     name: 'High School & Junior College',
     classes: ['8th-A', '9th-A', '10th-A'],
     teethPerQuad: 7, // 1 to 7
+    activeToothDiagnoses: ['C_R', 'C_Y', 'M'],
     activeChecks: ['cavities', 'tartar', 'alignment', 'gums', 'stains']
   }
 ];
@@ -123,18 +167,21 @@ export const INITIAL_CAMPS = [
         id: '2nd-A',
         name: '2nd-A',
         teethPerQuad: 5,
+        activeToothDiagnoses: ['C_R', 'C_Y', 'R'],
         activeChecks: ['cavities', 'milk_tooth', 'gums']
       },
       {
         id: '4th-B',
         name: '4th-B',
         teethPerQuad: 6,
+        activeToothDiagnoses: ['C_R', 'C_Y', 'M', 'R'],
         activeChecks: ['cavities', 'tartar', 'alignment', 'milk_tooth', 'gums']
       },
       {
         id: '9th-A',
         name: '9th-A',
         teethPerQuad: 7,
+        activeToothDiagnoses: ['C_R', 'C_Y', 'M'],
         activeChecks: ['cavities', 'tartar', 'alignment', 'gums', 'stains']
       }
     ]

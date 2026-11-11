@@ -1,5 +1,6 @@
 import React from 'react';
 import { getToothLabels } from '../utils/clinicalEvaluator';
+import { DEFAULT_TOOTH_DIAGNOSES } from '../data/defaultData';
 
 /**
  * Standard Anatomical Dental Chart (Palmer / FDI Clinician's Perspective)
@@ -10,8 +11,11 @@ import { getToothLabels } from '../utils/clinicalEvaluator';
  * Bottom-Right: Lower Left (LL / खालचे-डावे)
  * Incisors (1 or A) meet at the midline; molars expand laterally.
  */
-export const DentalChartSVG = ({ teethPerQuad = 6, teethData = {} }) => {
+export const DentalChartSVG = ({ teethPerQuad = 6, teethData = {}, toothDiagnosesList = [] }) => {
   const labels = getToothLabels(teethPerQuad);
+  const allToothDiags = toothDiagnosesList && toothDiagnosesList.length > 0
+    ? toothDiagnosesList
+    : DEFAULT_TOOTH_DIAGNOSES;
 
   const getArchCoordinates = (quadrant, index, total) => {
     const t = 0.14 + (index / Math.max(total - 1, 1)) * 0.78;
@@ -99,7 +103,10 @@ export const DentalChartSVG = ({ teethPerQuad = 6, teethData = {} }) => {
       {quadrants.map((q) =>
         labels.map((lbl, idx) => {
           const key = `${q}${lbl}`;
-          const status = teethData[key]; // 'C_R', 'C_Y', 'M', 'R', or undefined
+          const status = teethData[key]; // 'C_R', 'C_Y', 'M', 'R', or custom ID
+          const matchedDiag = allToothDiags.find((d) => d.id === status);
+          const color = matchedDiag?.colorHex || (status === 'C_R' ? '#E52629' : status === 'C_Y' ? '#f59e0b' : status === 'M' ? '#1B2F5A' : '#ea580c');
+          const isMissing = status === 'M' || matchedDiag?.name?.toLowerCase().includes('missing');
           const { x, y } = getArchCoordinates(q, idx, labels.length);
           const isMolar = idx >= 3;
           const r = isMolar ? 8 : 6.8;
@@ -111,65 +118,38 @@ export const DentalChartSVG = ({ teethPerQuad = 6, teethData = {} }) => {
                 cx="0"
                 cy="0"
                 r={r}
-                fill={status === 'M' ? '#1B2F5A' : '#FFFFFF'}
+                fill={isMissing ? color : '#FFFFFF'}
                 stroke="#1B2F5A"
                 strokeWidth="1.3"
               />
               {/* Inner occlusal groove for normal/cavity teeth */}
-              {isMolar && status !== 'M' && (
+              {isMolar && !isMissing && (
                 <path d="M -2.5 -2 L 2.5 2 M -2.5 2 L 2.5 -2" stroke="#94a3b8" strokeWidth="0.8" />
               )}
 
-              {/* Cavity Deep / Urgent (C_R) -> Dark decay center + Red Callout Circle */}
-              {status === 'C_R' && (
+              {/* Dynamic Callout & Dot for Active Status */}
+              {status && !isMissing && (
                 <>
-                  <circle cx="0" cy="0" r="3.6" fill="#E52629" />
-                  <circle
-                    cx="0"
-                    cy="0"
-                    r={r + 5.2}
-                    fill="none"
-                    stroke="#E52629"
-                    strokeWidth="2.6"
-                  />
-                </>
-              )}
-
-              {/* Cavity Early / Moderate (C_Y) -> Amber spot + Yellow Callout Circle */}
-              {status === 'C_Y' && (
-                <>
-                  <circle cx="0" cy="0" r="3.3" fill="#f59e0b" />
+                  <circle cx="0" cy="0" r="3.4" fill={color} />
                   <circle
                     cx="0"
                     cy="0"
                     r={r + 5}
                     fill="none"
-                    stroke="#f59e0b"
-                    strokeWidth="2.4"
+                    stroke={color}
+                    strokeWidth={matchedDiag?.severity === 'Urgent' ? '2.6' : '2.2'}
+                    strokeDasharray={status === 'R' ? '2.5,2' : undefined}
                   />
                 </>
-              )}
-
-              {/* Retained / Mobile Milk Tooth (R) -> Dashed Orange Ring */}
-              {status === 'R' && (
-                <circle
-                  cx="0"
-                  cy="0"
-                  r={r + 4.5}
-                  fill="none"
-                  stroke="#ea580c"
-                  strokeWidth="2"
-                  strokeDasharray="2.5,2"
-                />
               )}
 
               {/* Tooth Number / Letter Label */}
               <text
                 x="0"
-                y={status === 'M' ? '3' : '3.2'}
+                y={isMissing ? '3' : '3.2'}
                 textAnchor="middle"
                 className={`text-[8px] font-black select-none pointer-events-none ${
-                  status === 'M' ? 'fill-white' : 'fill-[#1B2F5A]'
+                  isMissing ? 'fill-white' : 'fill-[#1B2F5A]'
                 }`}
               >
                 {lbl}

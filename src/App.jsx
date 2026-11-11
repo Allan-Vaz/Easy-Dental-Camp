@@ -20,6 +20,7 @@ import {
   saveLocalFallback
 } from './firebase';
 import {
+  DEFAULT_TOOTH_DIAGNOSES,
   DEFAULT_DIAGNOSES,
   DEFAULT_RULE_GROUPS,
   DEFAULT_STAFF,
@@ -35,6 +36,7 @@ import { A5ReportCard, DefaultAvmLogoBadge, DefaultCartoonMascotSVG } from './co
 import { PrincipalAuditView } from './components/PrincipalAuditView';
 import { ClinicSettingsModal } from './components/ClinicSettingsModal';
 import { OnboardingWizard } from './components/OnboardingWizard';
+import { RulesSettingsView } from './components/RulesSettingsView';
 
 export default function App() {
   const [fbUser, setFbUser] = useState(null);
@@ -46,6 +48,7 @@ export default function App() {
   const [camps, setCamps] = useState(() => loadLocalFallback('CAMPS', INITIAL_CAMPS));
   const [patients, setPatients] = useState(() => loadLocalFallback('PATIENTS', INITIAL_PATIENTS));
   const [diagnosesList, setDiagnosesList] = useState(() => loadLocalFallback('DIAGNOSES', DEFAULT_DIAGNOSES));
+  const [toothDiagnosesList, setToothDiagnosesList] = useState(() => loadLocalFallback('TOOTH_DIAGNOSES', DEFAULT_TOOTH_DIAGNOSES));
   const [isClinicModalOpen, setIsClinicModalOpen] = useState(false);
 
   // Auto-save to LocalStorage on every change for 100% offline persistence
@@ -68,6 +71,10 @@ export default function App() {
   useEffect(() => {
     saveLocalFallback('DIAGNOSES', diagnosesList);
   }, [diagnosesList]);
+
+  useEffect(() => {
+    saveLocalFallback('TOOTH_DIAGNOSES', toothDiagnosesList);
+  }, [toothDiagnosesList]);
 
   // Active User Session (PIN Auth)
   const [currentUser, setCurrentUser] = useState(null);
@@ -149,6 +156,7 @@ export default function App() {
     const patientsCol = collection(db, 'patients');
     const staffCol = collection(db, 'staff_users');
     const diagCol = collection(db, 'diagnoses');
+    const toothDiagCol = collection(db, 'tooth_diagnoses');
     const clinicDoc = doc(db, 'clinic_settings', 'default_profile');
 
     const unsubClinic = onSnapshot(clinicDoc, (snap) => {
@@ -182,12 +190,19 @@ export default function App() {
       }
     });
 
+    const unsubToothDiag = onSnapshot(toothDiagCol, (snap) => {
+      if (!snap.empty) {
+        setToothDiagnosesList(snap.docs.map((d) => d.data()));
+      }
+    });
+
     return () => {
       unsubClinic();
       unsubCamps();
       unsubPatients();
       unsubStaff();
       unsubDiag();
+      unsubToothDiag();
     };
   }, [fbUser]);
 
@@ -258,6 +273,32 @@ export default function App() {
     showToast('Removed diagnosis from master list.');
   };
 
+  const saveToothDiagnosis = async (diagItem) => {
+    setToothDiagnosesList((prev) => {
+      const exists = prev.some((d) => d.id === diagItem.id);
+      return exists ? prev.map((d) => (d.id === diagItem.id ? diagItem : d)) : [...prev, diagItem];
+    });
+    if (isFirebaseConfigured && fbUser && db) {
+      try {
+        await setDoc(doc(db, 'tooth_diagnoses', diagItem.id), diagItem);
+      } catch (e) {
+        console.warn('Firestore tooth diagnosis save error:', e);
+      }
+    }
+  };
+
+  const deleteToothDiagnosis = async (diagId) => {
+    setToothDiagnosesList((prev) => prev.filter((d) => d.id !== diagId));
+    if (isFirebaseConfigured && fbUser && db) {
+      try {
+        await deleteDoc(doc(db, 'tooth_diagnoses', diagId));
+      } catch (e) {
+        console.warn('Firestore tooth diagnosis delete error:', e);
+      }
+    }
+    showToast('Removed tooth diagnosis from master list.');
+  };
+
   const updateCampRuleGroups = (nextRuleGroups, extraClassIds = []) => {
     if (!activeCamp) return;
     const allKnownClassIds = new Set([
@@ -273,6 +314,9 @@ export default function App() {
         id: clsId,
         name: clsId,
         teethPerQuad: matchedRG ? Number(matchedRG.teethPerQuad) : Number(existingGrp?.teethPerQuad) || 6,
+        activeToothDiagnoses: matchedRG
+          ? matchedRG.activeToothDiagnoses || (toothDiagnosesList || DEFAULT_TOOTH_DIAGNOSES).map((d) => d.id)
+          : existingGrp?.activeToothDiagnoses || ['C_R', 'C_Y', 'M', 'R'],
         activeChecks: matchedRG
           ? matchedRG.activeChecks || []
           : existingGrp?.activeChecks || ['cavities', 'tartar', 'alignment']
@@ -1038,6 +1082,7 @@ export default function App() {
               savePatientRecord={savePatientRecord}
               showToast={showToast}
               diagnosesList={diagnosesList}
+              toothDiagnosesList={toothDiagnosesList}
             />
           ) : (
             <PaperGridEntry
@@ -1130,6 +1175,7 @@ export default function App() {
                       camp={activeCamp}
                       group={activeGroup}
                       diagnosesList={diagnosesList}
+                      toothDiagnosesList={toothDiagnosesList}
                       clinicProfile={clinicProfile}
                     />
                   ))}
@@ -1161,78 +1207,19 @@ export default function App() {
 
       {/* TAB 4: SETTINGS & RULE GROUPS */}
       {activeTab === 'settings' && currentUser.role === 'admin' && (
-        <main className="max-w-7xl w-full mx-auto p-4 space-y-6 no-print">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
-              <div>
-                <span className="text-[11px] font-black uppercase tracking-wider text-[#E52629]">
-                  Pediatric Rule Groups
-                </span>
-                <h2 className="text-lg font-black text-[#1B2F5A]">
-                  Class Dentition & Diagnostics Rules — {activeCamp?.instituteName}
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Configure primary (5 teeth/quad) vs mixed (6) vs permanent (7-8) dentition by class.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
-                <input
-                  type="text"
-                  value={newRuleGroupName}
-                  onChange={(e) => setNewRuleGroupName(e.target.value)}
-                  placeholder="New Group Name"
-                  className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white w-48"
-                />
-                <select
-                  value={newRuleGroupTeeth}
-                  onChange={(e) => setNewRuleGroupTeeth(Number(e.target.value))}
-                  className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-white text-[#1B2F5A]"
-                >
-                  <option value={5}>5 Teeth/Quad</option>
-                  <option value={6}>6 Teeth/Quad</option>
-                  <option value={7}>7 Teeth/Quad</option>
-                  <option value={8}>8 Teeth/Quad</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!newRuleGroupName.trim()) return;
-                    const cur = activeCamp?.ruleGroups || DEFAULT_RULE_GROUPS;
-                    const newRG = {
-                      id: `RG_${Date.now().toString().slice(-4)}`,
-                      name: newRuleGroupName.trim(),
-                      classes: [],
-                      teethPerQuad: Number(newRuleGroupTeeth) || 5,
-                      activeChecks: ['cavities']
-                    };
-                    updateCampRuleGroups([...cur, newRG]);
-                    setNewRuleGroupName('');
-                    showToast(`Added Rule Group: ${newRG.name}`);
-                  }}
-                  className="px-3.5 py-1.5 rounded-lg bg-[#1B2F5A] text-white text-xs font-black"
-                >
-                  + Add
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4">
-              {(activeCamp?.ruleGroups || DEFAULT_RULE_GROUPS).map((rg) => (
-                <div key={rg.id} className="p-4 rounded-xl border bg-slate-50 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="font-black text-[#1B2F5A]">{rg.name}</span>
-                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-200">
-                      {rg.teethPerQuad} Teeth/Quad
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-600">
-                    Active Classes: {(rg.classes || []).join(', ') || 'None assigned'}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+        <main className="max-w-7xl w-full mx-auto p-4 no-print">
+          <RulesSettingsView
+            activeCamp={activeCamp}
+            campPatients={campPatients}
+            updateCampRuleGroups={updateCampRuleGroups}
+            toothDiagnosesList={toothDiagnosesList}
+            saveToothDiagnosis={saveToothDiagnosis}
+            deleteToothDiagnosis={deleteToothDiagnosis}
+            diagnosesList={diagnosesList}
+            saveMasterDiagnosisItem={saveMasterDiagnosisItem}
+            deleteMasterDiagnosisItem={deleteMasterDiagnosisItem}
+            showToast={showToast}
+          />
         </main>
       )}
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
 import { DentalChartSVG } from './DentalChartSVG';
 import { resolveClassRules, formatDisplayDate } from '../utils/clinicalEvaluator';
-import { ADVICE_TEMPLATES, DEFAULT_DIAGNOSES } from '../data/defaultData';
+import { ADVICE_TEMPLATES, DEFAULT_DIAGNOSES, DEFAULT_TOOTH_DIAGNOSES } from '../data/defaultData';
 
 export const DefaultAvmLogoBadge = ({ size = 'md' }) => (
   <div className={`flex items-center gap-1.5 select-none ${size === 'sm' ? 'scale-90' : ''}`}>
@@ -32,11 +32,16 @@ export const DefaultCartoonMascotSVG = () => (
   </svg>
 );
 
-export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicProfile }) => {
+export const A5ReportCard = ({ student, camp, group, diagnosesList = [], toothDiagnosesList = [], clinicProfile }) => {
   const exam = student?.exam || { teeth: {}, flags: [], severity: 'G', noteCode: 'HEALTHY' };
   const resolvedRules = resolveClassRules(camp, student?.groupId || group?.id);
   const teethPerQuad = resolvedRules.teethPerQuad || group?.teethPerQuad || 6;
   const voucherCode = `${camp?.campCode || 'CAMP'}-${student?.groupId}-${student?.rollNo}`;
+
+  // Master Tooth Diagnoses List
+  const allToothDiags = toothDiagnosesList && toothDiagnosesList.length > 0
+    ? toothDiagnosesList
+    : DEFAULT_TOOTH_DIAGNOSES;
 
   // Clinic branding derived from Master Clinic Profile (with camp fallback)
   const clinicPhone = clinicProfile?.phone || camp?.clinicPhone || '9545660336';
@@ -61,10 +66,8 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicP
 
   // Detect positive findings on anatomical chart
   const teethValues = Object.values(exam.teeth || {});
-  const hasDeepCavity = teethValues.includes('C_R');
-  const hasEarlyDecay = teethValues.includes('C_Y');
-  const hasMissing = teethValues.includes('M');
-  const hasPositiveFindings = hasDeepCavity || hasEarlyDecay || hasMissing;
+  const distinctFindingIds = Array.from(new Set(teethValues));
+  const hasPositiveFindings = distinctFindingIds.length > 0;
 
   // WhatsApp Link
   const cleanPhone = clinicPhone.replace(/\D/g, '');
@@ -219,44 +222,36 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicP
             </div>
 
             <div className="flex-1 flex items-center justify-center py-0.5">
-              <DentalChartSVG teethPerQuad={teethPerQuad} teethData={exam.teeth || {}} />
+              <DentalChartSVG teethPerQuad={teethPerQuad} teethData={exam.teeth || {}} toothDiagnosesList={allToothDiags} />
             </div>
 
             {/* Smart Conditional Legend */}
             <div className="w-full pt-1 border-t border-[#1B2F5A]/15 min-h-[24px] flex items-center">
               {hasPositiveFindings ? (
                 <div className="w-full flex flex-wrap items-center justify-center gap-1.5 text-[8px] font-extrabold text-[#1B2F5A]">
-                  {hasDeepCavity && (
-                    <div className="flex items-center gap-1 bg-red-50 px-1.5 py-0.5 rounded border border-[#E52629]/30">
-                      <span className="w-2.5 h-2.5 rounded-full border-2 border-[#E52629] bg-[#E52629]/20 shrink-0 inline-block"></span>
-                      <div className="leading-none">
-                        <div className="text-[#E52629] font-black text-[7.5px]">Deep Cavity</div>
-                        <div className="text-[6.5px] text-slate-600 font-bold">किडलेले दात</div>
-                      </div>
-                    </div>
-                  )}
+                  {distinctFindingIds.map((fId) => {
+                    const matchedDiag = allToothDiags.find((d) => d.id === fId);
+                    const color = matchedDiag?.colorHex || (fId === 'C_R' ? '#E52629' : fId === 'C_Y' ? '#f59e0b' : fId === 'M' ? '#1B2F5A' : '#ea580c');
+                    const nameEn = matchedDiag?.name || fId;
+                    const nameMr = fId === 'C_R' ? 'किडलेले दात' : fId === 'C_Y' ? 'सुरुवातीची कीड' : fId === 'M' ? 'दात नाही' : fId === 'R' ? 'दुधाचे दात' : nameEn;
 
-                  {hasEarlyDecay && (
-                    <div className="flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-400/50">
-                      <span className="w-2.5 h-2.5 rounded-full border-2 border-amber-500 bg-amber-300/30 shrink-0 inline-block"></span>
-                      <div className="leading-none">
-                        <div className="text-amber-800 font-black text-[7.5px]">Early Decay</div>
-                        <div className="text-[6.5px] text-slate-600 font-bold">सुरुवातीची कीड</div>
+                    return (
+                      <div
+                        key={fId}
+                        className="flex items-center gap-1 px-1.5 py-0.5 rounded border"
+                        style={{ backgroundColor: `${color}12`, borderColor: `${color}40` }}
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-full border-2 shrink-0 inline-block"
+                          style={{ borderColor: color, backgroundColor: `${color}35` }}
+                        ></span>
+                        <div className="leading-none">
+                          <div className="font-black text-[7.5px]" style={{ color }}>{nameEn}</div>
+                          <div className="text-[6.5px] text-slate-600 font-bold">{nameMr}</div>
+                        </div>
                       </div>
-                    </div>
-                  )}
-
-                  {hasMissing && (
-                    <div className="flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded border border-[#1B2F5A]/40">
-                      <span className="w-2.5 h-2.5 rounded-full border-2 border-[#1B2F5A] bg-[#1B2F5A] text-white text-[6.5px] flex items-center justify-center shrink-0 leading-none">
-                        ✕
-                      </span>
-                      <div className="leading-none">
-                        <div className="text-[#1B2F5A] font-black text-[7.5px]">Missing</div>
-                        <div className="text-[6.5px] text-slate-600 font-bold">दात नाही</div>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="w-full flex items-center justify-center gap-1 py-0.5 px-1.5 bg-emerald-50 rounded border border-emerald-300 text-emerald-800">
@@ -343,7 +338,11 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicP
                   Dentist Advice / डॉक्टरांचा सल्ला:
                 </div>
                 <p className="text-[7.5px] leading-snug text-slate-800 font-semibold mt-0.5 line-clamp-3">
-                  {exam.customNote ? exam.customNote : adviceObj.textMr}
+                  {exam.customNote
+                    ? exam.customNote
+                    : ((exam.adviceLanguage || 'mr') === 'en'
+                      ? (adviceObj.textEn || adviceObj.adviceEn)
+                      : (adviceObj.textMr || adviceObj.adviceMr))}
                 </p>
               </div>
               <div className="w-24 border border-dashed border-[#1B2F5A] rounded p-0.5 text-center bg-white shrink-0">
