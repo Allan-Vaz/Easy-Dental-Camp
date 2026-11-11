@@ -395,12 +395,12 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicP
             {/* Subtle decorative inner border */}
             <div className="absolute inset-1 border border-dashed border-white/15 rounded-xl pointer-events-none"></div>
 
-            {/* Left Side: 3 Horizontal Sub-segments */}
-            <div className="flex-1 min-w-0 h-full flex flex-col justify-between py-0.5 relative z-10 pr-2">
+            {/* Left Side: 3 Equidistant Sub-segments */}
+            <div className="flex-1 min-w-0 h-full flex flex-col justify-evenly py-1 relative z-10 pr-2">
               {/* Horizontal Sub-segment 1: Marathi Promotional Line (Crimson Red 3D Shadow, Descenders Protected) */}
-              <div className="flex-1 flex items-center min-h-0 overflow-visible py-0.5">
+              <div className="overflow-visible flex items-center">
                 <div
-                  className="text-[20px] font-black text-[#FEF08A] tracking-tight leading-[1.28] pb-1"
+                  className="text-[20px] font-black text-[#FEF08A] tracking-tight leading-[1.3] pb-1"
                   style={{
                     textShadow: '2px 2px 0px #b91c1c, 4px 4px 0px #7f1d1d, 0 0 16px rgba(254,240,138,0.45)'
                   }}
@@ -409,10 +409,10 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicP
                 </div>
               </div>
 
-              {/* Horizontal Sub-segment 2: English Promotional Line (Center-aligned, 20px Line 1 Matches Marathi, Hard-Edged Extruded 3D Block Shadow) */}
-              <div className="flex-1 flex flex-col items-center justify-center text-center min-h-0 py-0.5 overflow-visible">
+              {/* Horizontal Sub-segment 2: English Promotional Line (Center-aligned, 20px Line 1, Equidistant, Descenders Protected) */}
+              <div className="flex flex-col items-center justify-center text-center overflow-visible py-0.5">
                 <div
-                  className="text-[20px] font-black text-white tracking-tight leading-tight truncate max-w-full"
+                  className="text-[20px] font-black text-white tracking-tight leading-[1.35] pb-1.5 whitespace-nowrap overflow-visible max-w-full"
                   style={{
                     textShadow:
                       '1px 1px 0px #0A111E, 2px 2px 0px #0A111E, 3px 3px 0px #000000, 3.5px 3.5px 0px #000000'
@@ -421,7 +421,7 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicP
                   {englishOfferLine1}
                 </div>
                 <div
-                  className="text-[13.5px] font-black text-white tracking-wide leading-tight mt-1 truncate max-w-full"
+                  className="text-[13.5px] font-black text-white tracking-wide leading-[1.3] pb-1 mt-0.5 whitespace-nowrap overflow-visible max-w-full"
                   style={{
                     textShadow:
                       '1px 1px 0px #0A111E, 2px 2px 0px #0A111E, 2.5px 2.5px 0px #000000'
@@ -431,9 +431,9 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicP
                 </div>
               </div>
 
-              {/* Horizontal Sub-segment 3: Valid Till Date Pill (Center Aligned, Shorter by ~1/3rd, Stacked Centered Labels, No Colon) */}
-              <div className="flex-1 flex items-center justify-center min-h-0 pt-0.5">
-                <div className="w-[68%] max-w-[240px] h-full max-h-[34px] px-3.5 py-1 rounded-xl bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300 text-[#1B2F5A] border-2 border-white shadow-lg flex items-center justify-between font-black">
+              {/* Horizontal Sub-segment 3: Valid Till Date Pill (Center Aligned, Equidistant, Shorter by ~1/3rd, Stacked Centered Labels, No Colon) */}
+              <div className="flex items-center justify-center overflow-visible">
+                <div className="w-[68%] max-w-[240px] h-[34px] px-3.5 py-1 rounded-xl bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300 text-[#1B2F5A] border-2 border-white shadow-lg flex items-center justify-between font-black">
                   <div className="flex flex-col items-center text-center leading-none">
                     <span className="text-[9.5px] font-black tracking-tight text-[#1B2F5A] uppercase text-center">
                       सवलत वैधता
