@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { ChevronRight, Search } from 'lucide-react';
-import { getToothLabels, evaluateClinicalState } from '../utils/clinicalEvaluator';
+import React, { useState, useMemo } from 'react';
+import { ChevronRight, Search, Check, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { getToothLabels, evaluateClinicalState, getRelevantAdviceOptions } from '../utils/clinicalEvaluator';
 import { ADVICE_TEMPLATES, DEFAULT_TOOTH_DIAGNOSES } from '../data/defaultData';
 
 export const ToothPad = ({
@@ -21,6 +21,7 @@ export const ToothPad = ({
   toothDiagnosesList = []
 }) => {
   const [activeToothPopover, setActiveToothPopover] = useState(null);
+  const [validationError, setValidationError] = useState('');
 
   const teethPerQuad = activeGroup?.teethPerQuad || 6;
   const labels = getToothLabels(teethPerQuad);
@@ -31,8 +32,31 @@ export const ToothPad = ({
   const activeToothDiagIds = activeGroup?.activeToothDiagnoses || allToothDiags.map((d) => d.id);
   const visibleToothDiagnoses = allToothDiags.filter((d) => activeToothDiagIds.includes(d.id));
 
+  // Examination Status Flags for Current Active Student
+  const currentTeeth = activePatient?.exam?.teeth || {};
+  const currentFlags = activePatient?.exam?.flags || [];
+  const isAllClear = Boolean(activePatient?.exam?.isAllClear);
+  const hasToothIssues = Object.keys(currentTeeth).length > 0;
+  const hasFlagIssues = currentFlags.length > 0;
+  const hasAnyIssues = hasToothIssues || hasFlagIssues;
+  const isExamined = hasAnyIssues || isAllClear;
+  const hasSelectedAdvice = Boolean(activePatient?.exam?.noteCode && activePatient.exam.noteCode.trim());
+  const adviceLang = activePatient?.exam?.adviceLanguage || 'mr';
+
+  // Compute strictly matching advice options for detected issues or healthy state
+  const relevantAdviceOptions = useMemo(() => {
+    return getRelevantAdviceOptions(
+      currentTeeth,
+      currentFlags,
+      isAllClear,
+      allToothDiags,
+      diagnosesList
+    );
+  }, [currentTeeth, currentFlags, isAllClear, allToothDiags, diagnosesList]);
+
   const setToothStatus = (toothKey, statusValue) => {
     if (!activePatient) return;
+    setValidationError('');
     updateActivePatientExam((exam) => {
       const nextTeeth = { ...(exam.teeth || {}) };
       if (!statusValue || statusValue === 'CLEAR') {
@@ -40,13 +64,23 @@ export const ToothPad = ({
       } else {
         nextTeeth[toothKey] = statusValue;
       }
-      const autoEval = evaluateClinicalState(nextTeeth, exam.flags || []);
+      const autoEval = evaluateClinicalState(nextTeeth, exam.flags || [], false);
+      const isStillHealthy = Object.keys(nextTeeth).length === 0 && (exam.flags || []).length === 0 && exam.isAllClear;
+
+      let nextNoteCode = exam.noteCode;
+      if (!isStillHealthy && nextNoteCode === 'HEALTHY') {
+        nextNoteCode = autoEval.noteCode || '';
+      } else if (!nextNoteCode) {
+        nextNoteCode = autoEval.noteCode || '';
+      }
+
       return {
         ...exam,
+        isAllClear: false,
         teeth: nextTeeth,
         flags: autoEval.flags,
-        severity: autoEval.severity,
-        noteCode: autoEval.noteCode
+        severity: autoEval.severity || '',
+        noteCode: nextNoteCode
       };
     });
     setActiveToothPopover(null);
@@ -54,23 +88,70 @@ export const ToothPad = ({
 
   const toggleDiagnosisFlag = (flagId) => {
     if (!activePatient) return;
+    setValidationError('');
     updateActivePatientExam((exam) => {
       const cur = exam.flags || [];
       const nextFlags = cur.includes(flagId) ? cur.filter((f) => f !== flagId) : [...cur, flagId];
-      const autoEval = evaluateClinicalState(exam.teeth || {}, nextFlags);
+      const autoEval = evaluateClinicalState(exam.teeth || {}, nextFlags, false);
+
+      let nextNoteCode = exam.noteCode;
+      if (nextNoteCode === 'HEALTHY' && (nextFlags.length > 0 || Object.keys(exam.teeth || {}).length > 0)) {
+        nextNoteCode = autoEval.noteCode || '';
+      } else if (!nextNoteCode) {
+        nextNoteCode = autoEval.noteCode || '';
+      }
+
       return {
         ...exam,
+        isAllClear: false,
         flags: nextFlags,
-        severity: autoEval.severity,
-        noteCode: autoEval.noteCode
+        severity: autoEval.severity || '',
+        noteCode: nextNoteCode
+      };
+    });
+  };
+
+  const toggleAllClearHealthy = () => {
+    if (!activePatient) return;
+    setValidationError('');
+    updateActivePatientExam((exam) => {
+      if (exam.isAllClear) {
+        return {
+          ...exam,
+          isAllClear: false,
+          severity: '',
+          noteCode: ''
+        };
+      }
+      return {
+        ...exam,
+        isAllClear: true,
+        teeth: {},
+        flags: [],
+        severity: 'G',
+        noteCode: 'HEALTHY'
       };
     });
   };
 
   const handleSaveAndNext = () => {
     if (!activePatient) return;
+
+    if (!isExamined) {
+      setValidationError('⚠️ Examination Required: Please record dental issues or tap "All Clear / Healthy Smile" before saving.');
+      showToast('⚠️ Examination incomplete! Mark issues or click All Clear.');
+      return;
+    }
+
+    if (!activePatient.exam?.noteCode) {
+      setValidationError('⚠️ Advice Required: Please select an advice template from the dropdown before saving.');
+      showToast('⚠️ Please select an advice template.');
+      return;
+    }
+
+    setValidationError('');
     updateActivePatientExam((ex) => ex, true);
-    showToast(`Saved #${activePatient.rollNo} ${activePatient.name}`);
+    showToast(`✅ Saved #${activePatient.rollNo} ${activePatient.name}`);
 
     const currentIndex = groupPatients.findIndex((p) => p.id === activePatient.id);
     if (currentIndex >= 0 && currentIndex + 1 < groupPatients.length) {
@@ -212,29 +293,80 @@ export const ToothPad = ({
                 </div>
               </div>
 
-              {/* Severity Override */}
-              <div className="flex items-center gap-1.5">
-                {[
-                  { code: 'G', labelEn: 'Healthy', labelMr: 'उत्तम', color: 'bg-emerald-600' },
-                  { code: 'Y', labelEn: 'Medium Care', labelMr: 'मध्यम', color: 'bg-amber-500' },
-                  { code: 'R', labelEn: 'Urgent', labelMr: 'तत्काळ', color: 'bg-[#E52629]' }
-                ].map((sObj) => {
-                  const isCurrent = (activePatient.exam?.severity || 'G') === sObj.code;
-                  return (
-                    <button
-                      key={sObj.code}
-                      type="button"
-                      onClick={() => updateActivePatientExam((ex) => ({ ...ex, severity: sObj.code }))}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition border ${
-                        isCurrent
-                          ? `${sObj.color} text-white border-transparent shadow`
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              {/* Examination Gate Controls & Status Badge */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Prominent All Clear Button */}
+                <button
+                  type="button"
+                  onClick={toggleAllClearHealthy}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 border shadow-sm ${
+                    isAllClear
+                      ? 'bg-emerald-600 text-white border-emerald-700 shadow ring-2 ring-emerald-300'
+                      : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 hover:border-emerald-400'
+                  }`}
+                  title="Mark student as healthy after physical examination"
+                >
+                  <span className="text-sm">⭐</span>
+                  <span>All Clear / Healthy Smile</span>
+                  <span className="text-[10.5px] opacity-90 font-bold">(कोणतीही समस्या नाही)</span>
+                  {isAllClear && <Check className="w-4 h-4 text-white ml-0.5" />}
+                </button>
+
+                {/* Clinical Status Badge */}
+                {isAllClear ? (
+                  <span className="px-3 py-2 rounded-xl text-xs font-black bg-emerald-600 text-white shadow flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Verified Healthy Smile</span>
+                  </span>
+                ) : hasAnyIssues ? (
+                  <div className="flex items-center gap-1">
+                    <span
+                      className={`px-3 py-2 rounded-xl text-xs font-black text-white shadow flex items-center gap-1.5 ${
+                        activePatient.exam?.severity === 'R'
+                          ? 'bg-[#E52629]'
+                          : 'bg-amber-500 text-slate-950 font-black'
                       }`}
                     >
-                      {sObj.labelEn} / {sObj.labelMr}
-                    </button>
-                  );
-                })}
+                      <AlertTriangle className="w-4 h-4" />
+                      <span>
+                        {activePatient.exam?.severity === 'R'
+                          ? '🚨 URGENT CARE (तत्काळ)'
+                          : '⚠️ MEDIUM CARE (मध्यम)'}
+                      </span>
+                    </span>
+                    <div className="flex bg-white/90 p-0.5 rounded-lg border border-slate-200 text-[10px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => updateActivePatientExam((ex) => ({ ...ex, severity: 'Y' }))}
+                        className={`px-2 py-0.5 rounded ${
+                          activePatient.exam?.severity === 'Y'
+                            ? 'bg-amber-400 text-slate-950 font-black'
+                            : 'text-slate-500'
+                        }`}
+                        title="Medium Care"
+                      >
+                        MED
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateActivePatientExam((ex) => ({ ...ex, severity: 'R' }))}
+                        className={`px-2 py-0.5 rounded ${
+                          activePatient.exam?.severity === 'R'
+                            ? 'bg-[#E52629] text-white font-black'
+                            : 'text-slate-500'
+                        }`}
+                        title="Urgent Care"
+                      >
+                        URG
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <span className="px-3 py-2 rounded-xl text-xs font-black bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-700" />
+                    <span>⚠️ Examination Pending</span>
+                  </span>
+                )}
               </div>
             </div>
 
@@ -450,25 +582,43 @@ export const ToothPad = ({
                 </div>
 
                 <select
-                  value={activePatient.exam?.noteCode || 'HEALTHY'}
-                  onChange={(e) =>
-                    updateActivePatientExam((ex) => ({ ...ex, noteCode: e.target.value }))
-                  }
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white text-[#1B2F5A]"
+                  value={activePatient.exam?.noteCode || ''}
+                  onChange={(e) => {
+                    setValidationError('');
+                    updateActivePatientExam((ex) => ({ ...ex, noteCode: e.target.value }));
+                  }}
+                  className={`w-full px-3 py-2 rounded-xl border text-xs font-bold bg-white text-[#1B2F5A] transition ${
+                    !activePatient.exam?.noteCode
+                      ? 'border-amber-400 ring-2 ring-amber-100 bg-amber-50/20'
+                      : 'border-slate-300'
+                  }`}
                 >
-                  {Object.values(ADVICE_TEMPLATES).map((tpl) => (
+                  <option value="">
+                    {relevantAdviceOptions.length === 0
+                      ? '⚠️ Examine patient first to unlock advice options'
+                      : '-- Please Select Advice Template --'}
+                  </option>
+                  {relevantAdviceOptions.map((tpl) => (
                     <option key={tpl.code} value={tpl.code}>
                       {tpl.label} ({(activePatient.exam?.adviceLanguage || 'mr') === 'en' ? 'English' : 'मराठी'})
                     </option>
                   ))}
                 </select>
 
-                <p className="text-[10.5px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-200 mt-1.5 font-medium leading-relaxed italic">
-                  "{activePatient.exam?.customNote ||
-                    ((activePatient.exam?.adviceLanguage || 'mr') === 'en'
-                      ? (ADVICE_TEMPLATES[activePatient.exam?.noteCode || 'HEALTHY']?.textEn)
-                      : (ADVICE_TEMPLATES[activePatient.exam?.noteCode || 'HEALTHY']?.textMr))}"
-                </p>
+                {activePatient.exam?.noteCode && ADVICE_TEMPLATES[activePatient.exam.noteCode] ? (
+                  <p className="text-[10.5px] text-slate-700 bg-slate-50 p-2.5 rounded-lg border border-slate-200 mt-1.5 font-medium leading-relaxed italic">
+                    "{activePatient.exam?.customNote ||
+                      ((activePatient.exam?.adviceLanguage || 'mr') === 'en'
+                        ? (ADVICE_TEMPLATES[activePatient.exam.noteCode]?.textEn || ADVICE_TEMPLATES[activePatient.exam.noteCode]?.adviceEn)
+                        : (ADVICE_TEMPLATES[activePatient.exam.noteCode]?.textMr || ADVICE_TEMPLATES[activePatient.exam.noteCode]?.adviceMr))}"
+                  </p>
+                ) : (
+                  <p className="text-[10.5px] text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200 mt-1.5 font-semibold">
+                    {isExamined
+                      ? '👉 Please select an advice template above for this student.'
+                      : 'ℹ️ Record dental issues or tap "All Clear" to unlock relevant advice templates.'}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -487,36 +637,49 @@ export const ToothPad = ({
               </div>
             </div>
 
-            {/* Action Bar */}
-            <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => {
-                  updateActivePatientExam(
-                    () => ({
-                      teeth: {},
-                      flags: [],
-                      severity: 'G',
-                      noteCode: 'HEALTHY',
-                      customNote: ''
-                    }),
-                    true
-                  );
-                  showToast(`Marked #${activePatient.rollNo} ${activePatient.name} as Healthy`);
-                }}
-                className="px-4 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-black text-xs border border-emerald-300"
-              >
-                ✓ All Clear (Healthy Smile)
-              </button>
+            {/* Validation Banner if Doctor Tries to Save Prematurely */}
+            {validationError && (
+              <div className="p-3 rounded-xl bg-red-50 border-2 border-red-300 text-[#E52629] text-xs font-bold flex items-center gap-2 shadow-sm animate-shake">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-[#E52629]" />
+                <span>{validationError}</span>
+              </div>
+            )}
 
-              <button
-                type="button"
-                onClick={handleSaveAndNext}
-                className="px-6 py-3 rounded-xl bg-[#1B2F5A] hover:bg-slate-800 text-white font-black text-xs shadow-md flex items-center gap-2"
-              >
-                <span>Save & Load Next Student</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
+            {/* Action Bar */}
+            <div className="pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                {!isExamined ? (
+                  <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                    <span>⚠️ Examination Incomplete (Mark issues or tap All Clear)</span>
+                  </span>
+                ) : !hasSelectedAdvice ? (
+                  <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                    <span>⚠️ Advice Selection Pending (Select template above)</span>
+                  </span>
+                ) : (
+                  <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>✅ Ready to Save (#{activePatient.rollNo} {activePatient.name})</span>
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveAndNext}
+                  className={`px-6 py-3 rounded-xl font-black text-xs shadow-md flex items-center gap-2 transition ${
+                    isExamined && hasSelectedAdvice
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-300'
+                      : 'bg-[#1B2F5A] hover:bg-slate-800 text-white'
+                  }`}
+                >
+                  <span>Save & Load Next Student</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         ) : (

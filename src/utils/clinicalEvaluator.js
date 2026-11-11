@@ -1,4 +1,4 @@
-import { DEFAULT_RULE_GROUPS } from '../data/defaultData';
+import { DEFAULT_RULE_GROUPS, ADVICE_TEMPLATES } from '../data/defaultData';
 
 /**
  * Returns tooth labels from midline outward.
@@ -40,7 +40,7 @@ export const resolveClassRules = (camp, classId) => {
   };
 };
 
-export const evaluateClinicalState = (teethMap = {}, flags = []) => {
+export const evaluateClinicalState = (teethMap = {}, flags = [], isAllClear = false) => {
   const toothValues = Object.values(teethMap || {});
   const hasRedCavity = toothValues.includes('C_R');
   const yellowCavityCount = toothValues.filter((v) => v === 'C_Y').length;
@@ -51,8 +51,8 @@ export const evaluateClinicalState = (teethMap = {}, flags = []) => {
   if (hasAnyCavity) nextFlags.add('cavities');
   if (hasRetained) nextFlags.add('milk_tooth');
 
-  let severity = 'G';
-  let noteCode = 'HEALTHY';
+  let severity = '';
+  let noteCode = '';
 
   if (hasRedCavity || yellowCavityCount >= 2) {
     severity = 'R';
@@ -63,9 +63,18 @@ export const evaluateClinicalState = (teethMap = {}, flags = []) => {
   } else if (nextFlags.has('milk_tooth') || hasRetained) {
     severity = 'Y';
     noteCode = 'MILK_CARE';
-  } else if (nextFlags.size > 0 || toothValues.length > 0) {
+  } else if (nextFlags.has('alignment')) {
+    severity = 'Y';
+    noteCode = 'BRACES_ALIGN';
+  } else if (nextFlags.has('gums')) {
+    severity = 'Y';
+    noteCode = 'GUM_CARE';
+  } else if (nextFlags.has('tartar') || nextFlags.has('stains') || nextFlags.size > 0 || toothValues.length > 0) {
     severity = 'Y';
     noteCode = 'CLEAN_ALIGN';
+  } else if (isAllClear) {
+    severity = 'G';
+    noteCode = 'HEALTHY';
   }
 
   return {
@@ -73,6 +82,84 @@ export const evaluateClinicalState = (teethMap = {}, flags = []) => {
     severity,
     noteCode
   };
+};
+
+/**
+ * Returns strictly the advice templates matching detected issues or healthy state.
+ */
+export const getRelevantAdviceOptions = (teethMap = {}, flags = [], isAllClear = false, toothDiagnosesList = [], diagnosesList = []) => {
+  const toothValues = Object.values(teethMap || {});
+  const flagSet = new Set(flags || []);
+  const options = [];
+
+  // If marked explicitly All Clear / Healthy Smile
+  if (isAllClear) {
+    if (ADVICE_TEMPLATES.HEALTHY) {
+      options.push(ADVICE_TEMPLATES.HEALTHY);
+    }
+    return options;
+  }
+
+  const hasCavity = toothValues.includes('C_R') || toothValues.includes('C_Y') || flagSet.has('cavities');
+  const hasCleaning = flagSet.has('tartar') || flagSet.has('stains');
+  const hasAlignment = flagSet.has('alignment');
+  const hasMilkTooth = toothValues.includes('R') || flagSet.has('milk_tooth');
+  const hasGums = flagSet.has('gums');
+
+  if (hasCavity && ADVICE_TEMPLATES.URG_FILL) {
+    options.push(ADVICE_TEMPLATES.URG_FILL);
+  }
+  if (hasCleaning && ADVICE_TEMPLATES.CLEAN_ALIGN) {
+    options.push(ADVICE_TEMPLATES.CLEAN_ALIGN);
+  }
+  if (hasAlignment && ADVICE_TEMPLATES.BRACES_ALIGN) {
+    options.push(ADVICE_TEMPLATES.BRACES_ALIGN);
+  }
+  if (hasMilkTooth && ADVICE_TEMPLATES.MILK_CARE) {
+    options.push(ADVICE_TEMPLATES.MILK_CARE);
+  }
+  if (hasGums && ADVICE_TEMPLATES.GUM_CARE) {
+    options.push(ADVICE_TEMPLATES.GUM_CARE);
+  }
+
+  // Also check if any custom findings have advice
+  if (Array.isArray(toothDiagnosesList)) {
+    toothValues.forEach((tVal) => {
+      const match = toothDiagnosesList.find((d) => d.id === tVal);
+      if (match && (match.adviceMr || match.adviceEn)) {
+        if (!options.some((o) => o.code === match.id)) {
+          options.push({
+            code: match.id,
+            label: match.name,
+            labelMr: match.name,
+            labelEn: match.name,
+            textMr: match.adviceMr,
+            textEn: match.adviceEn
+          });
+        }
+      }
+    });
+  }
+
+  if (Array.isArray(diagnosesList)) {
+    flags.forEach((fId) => {
+      const match = diagnosesList.find((d) => d.id === fId);
+      if (match && (match.adviceMr || match.adviceEn)) {
+        if (!options.some((o) => o.code === match.id || o.code === match.labelEn)) {
+          options.push({
+            code: match.id,
+            label: match.labelEn,
+            labelMr: match.labelMr || match.labelEn,
+            labelEn: match.labelEn,
+            textMr: match.adviceMr,
+            textEn: match.adviceEn
+          });
+        }
+      }
+    });
+  }
+
+  return options;
 };
 
 /**

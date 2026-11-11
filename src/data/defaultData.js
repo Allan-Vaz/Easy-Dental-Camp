@@ -112,29 +112,53 @@ export const DEFAULT_RULE_GROUPS = [
 ];
 
 export const ADVICE_TEMPLATES = {
+  HEALTHY: {
+    code: 'HEALTHY',
+    label: 'Healthy Smile (Oral Hygiene Maintenance)',
+    labelMr: 'निरोगी दात (दातांची निगा व सवयी)',
+    labelEn: 'Healthy Smile (Routine Oral Habits)',
+    textMr: 'अभिनंदन! तुमच्या पाल्याचे दात पूर्णपणे निरोगी आहेत. हे उत्तम आरोग्य टिकवण्यासाठी दिवसातून दोनदा (सकाळी व रात्री) ब्रश करा, गोड पदार्थ खाल्ल्यावर खळखळून गुळण्या करा आणि दर ६ महिन्यांनी दातांची नियमित तपासणी करा.',
+    textEn: "Congratulations! Your child's teeth are completely healthy. To maintain this great oral health, brush twice daily (morning & night), rinse thoroughly after sweets, and continue routine 6-month dental checkups."
+  },
   URG_FILL: {
     code: 'URG_FILL',
-    label: 'Urgent Filling / Cavity Care',
+    label: 'Cavity Care & Dental Filling',
+    labelMr: 'कीड प्रतिबंध व सिमेंट भरणे (Filling)',
+    labelEn: 'Cavity Care & Dental Filling',
     textMr: 'तुमच्या पाल्याच्या दातांमध्ये कीड सुरु झाली आहे. पुढील दुखापत व वेदना टाळण्यासाठी वेळीच सिमेंट भरणे (Filling) व उपचाराची गरज आहे.',
     textEn: 'Cavities detected. Timely dental filling is recommended to prevent pain and root canal issues.'
   },
   CLEAN_ALIGN: {
     code: 'CLEAN_ALIGN',
-    label: 'Scaling / Cleaning & Alignment',
-    textMr: 'दातांवर पिवळी पुट (Tartar) साचली आहे किंवा दातांची रचना तपासणे गरजेचे आहे. क्लिनिकमध्ये येऊन दातांची स्वच्छता करून घ्यावी.',
-    textEn: 'Tartar buildup or alignment issue noted. Professional scaling and orthodontic review advised.'
+    label: 'Tartar & Cleaning (Scaling)',
+    labelMr: 'दातांची स्वच्छता व पॉलिशिंग (Scaling)',
+    labelEn: 'Tartar Removal & Professional Cleaning',
+    textMr: 'दातांवर पिवळी पुट (Tartar) साचली आहे. क्लिनिकमध्ये येऊन दातांची व्यावसायिक स्वच्छता (Scaling) करून घ्यावी.',
+    textEn: 'Tartar buildup observed. Professional scaling and polishing advised to maintain gum health.'
+  },
+  BRACES_ALIGN: {
+    code: 'BRACES_ALIGN',
+    label: 'Orthodontic / Braces Consultation',
+    labelMr: 'वेडेवाकडे दात (Braces तपासणी)',
+    labelEn: 'Braces / Orthodontic Consultation',
+    textMr: 'दातांची रचना सरळ करण्यासाठी तज्ज्ञ ऑर्थोडॉन्टिस्टकडून (Braces/Aligners) तपासणी करून घ्यावी.',
+    textEn: 'Malaligned teeth observed. Orthodontic consultation for braces or aligners is recommended.'
   },
   MILK_CARE: {
     code: 'MILK_CARE',
-    label: 'Milk Tooth / Pediatric Care',
+    label: 'Pediatric / Milk Tooth Care',
+    labelMr: 'दुधाच्या दातांची तपासणी (Pediatric Care)',
+    labelEn: 'Retained Milk Tooth / Pediatric Consultation',
     textMr: 'दुधाचे दात हलत आहेत किंवा नवीन दात येताना जागा कमी पडत आहे. योग्य मार्गदर्शनासाठी डॉक्टरांचा सल्ला घ्यावा.',
     textEn: 'Mobile or retained milk tooth observed. Pediatric dental consultation advised for proper eruption.'
   },
-  HEALTHY: {
-    code: 'HEALTHY',
-    label: 'Healthy Smile (6-Month Routine)',
-    textMr: 'तुमच्या पाल्याचे दात निरोगी आहेत! दिवसातून दोनदा ब्रश करावे आणि दर ६ महिन्यांनी नियमित तपासणी करावी.',
-    textEn: 'Teeth are healthy! Brush twice daily and continue routine 6-month family dental checkups.'
+  GUM_CARE: {
+    code: 'GUM_CARE',
+    label: 'Gum Inflammation Care',
+    labelMr: 'हिरड्यांची काळजी व उपचार (Gum Care)',
+    labelEn: 'Gum Inflammation & Periodontal Care',
+    textMr: 'हिरड्यांना सूज आहे किंवा ब्रश करताना रक्त येते. हिरड्यांच्या आरोग्यासाठी वेळेवर उपचार व स्वच्छता घेणे आवश्यक आहे.',
+    textEn: 'Gum inflammation or bleeding on brushing noted. Periodontal care and proper brushing technique advised.'
   }
 };
 

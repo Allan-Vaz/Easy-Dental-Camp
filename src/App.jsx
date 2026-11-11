@@ -434,9 +434,11 @@ export default function App() {
     const currentExam = activePatient.exam || {
       teeth: {},
       flags: [],
-      severity: 'G',
-      noteCode: 'HEALTHY',
-      customNote: ''
+      severity: '',
+      noteCode: '',
+      isAllClear: false,
+      customNote: '',
+      adviceLanguage: 'mr'
     };
     const updatedExam = updaterFn(currentExam);
     const updatedPatient = {
@@ -473,7 +475,7 @@ export default function App() {
       age: Number(quickAddForm.age) || 10,
       gender: quickAddForm.gender || 'M',
       status: 'pending',
-      exam: { teeth: {}, flags: [], severity: 'G', noteCode: 'HEALTHY', customNote: '' }
+      exam: { teeth: {}, flags: [], severity: '', noteCode: '', isAllClear: false, customNote: '', adviceLanguage: 'mr' }
     };
 
     savePatientRecord(newPatient);
@@ -522,7 +524,7 @@ export default function App() {
         age: stu.age || 10,
         gender: stu.gender || 'M',
         status: 'pending',
-        exam: { teeth: {}, flags: [], severity: 'G', noteCode: 'HEALTHY', customNote: '' }
+        exam: { teeth: {}, flags: [], severity: '', noteCode: '', isAllClear: false, customNote: '', adviceLanguage: 'mr' }
       }));
 
       // Update state & persist
@@ -551,7 +553,7 @@ export default function App() {
       age: stu.age || 10,
       gender: stu.gender || 'M',
       status: 'pending',
-      exam: { teeth: {}, flags: [], severity: 'G', noteCode: 'HEALTHY', customNote: '' }
+      exam: { teeth: {}, flags: [], severity: '', noteCode: '', isAllClear: false, customNote: '', adviceLanguage: 'mr' }
     }));
 
     setPatients((prev) => [...prev, ...newPatientRecords]);
