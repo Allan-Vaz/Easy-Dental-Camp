@@ -57,9 +57,14 @@ export const RulesSettingsView = ({
   }, [toothDiagnosesList]);
 
   const safeDiagnosesList = useMemo(() => {
-    return Array.isArray(diagnosesList) && diagnosesList.length > 0
+    const list = Array.isArray(diagnosesList) && diagnosesList.length > 0
       ? diagnosesList
       : DEFAULT_DIAGNOSES;
+    if (!list.some((d) => d.id === 'healthy')) {
+      const defaultHealthy = DEFAULT_DIAGNOSES.find((d) => d.id === 'healthy');
+      return defaultHealthy ? [defaultHealthy, ...list] : list;
+    }
+    return list;
   }, [diagnosesList]);
 
   const ruleGroups = useMemo(() => {
@@ -1104,20 +1109,26 @@ export const RulesSettingsView = ({
 
                     {/* Severity */}
                     <td className="py-2.5 px-3 min-w-[110px]">
-                      <select
-                        value={item.defaultSeverity || 'Medium'}
-                        onChange={(e) =>
-                          saveMasterDiagnosisItem({ ...item, defaultSeverity: e.target.value })
-                        }
-                        className={`px-2 py-1 rounded-lg text-xs font-black border ${
-                          item.defaultSeverity === 'Urgent' || item.defaultSeverity === 'R'
-                            ? 'bg-red-50 text-[#E52629] border-red-300'
-                            : 'bg-amber-50 text-amber-800 border-amber-300'
-                        }`}
-                      >
-                        <option value="Urgent">Urgent</option>
-                        <option value="Medium">Medium</option>
-                      </select>
+                      {item.id === 'healthy' ? (
+                        <span className="px-2 py-1 rounded-lg text-xs font-black bg-emerald-50 text-emerald-800 border border-emerald-300 inline-block">
+                          Healthy
+                        </span>
+                      ) : (
+                        <select
+                          value={item.defaultSeverity || 'Medium'}
+                          onChange={(e) =>
+                            saveMasterDiagnosisItem({ ...item, defaultSeverity: e.target.value })
+                          }
+                          className={`px-2 py-1 rounded-lg text-xs font-black border ${
+                            item.defaultSeverity === 'Urgent' || item.defaultSeverity === 'R'
+                              ? 'bg-red-50 text-[#E52629] border-red-300'
+                              : 'bg-amber-50 text-amber-800 border-amber-300'
+                          }`}
+                        >
+                          <option value="Urgent">Urgent</option>
+                          <option value="Medium">Medium</option>
+                        </select>
+                      )}
                     </td>
 
                     {/* English Advice */}
@@ -1148,19 +1159,25 @@ export const RulesSettingsView = ({
 
                     {/* Actions */}
                     <td className="py-2.5 px-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (window.confirm(`Delete diagnosis "${item.labelEn}"?`)) {
-                            deleteMasterDiagnosisItem(item.id);
-                            showToast(`Deleted ${item.labelEn}`);
-                          }
-                        }}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
-                        title="Delete Diagnosis"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {item.id !== 'healthy' ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`Delete diagnosis "${item.labelEn}"?`)) {
+                              deleteMasterDiagnosisItem(item.id);
+                              showToast(`Deleted ${item.labelEn}`);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                          title="Delete Diagnosis"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          Core Default
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

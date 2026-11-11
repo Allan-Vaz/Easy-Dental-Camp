@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { ChevronRight, Search, Check, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { getToothLabels, evaluateClinicalState, getRelevantAdviceOptions } from '../utils/clinicalEvaluator';
-import { ADVICE_TEMPLATES, DEFAULT_TOOTH_DIAGNOSES } from '../data/defaultData';
+import { getToothLabels, evaluateClinicalState, getRelevantAdviceOptions, resolveMasterAdvice } from '../utils/clinicalEvaluator';
+import { DEFAULT_TOOTH_DIAGNOSES, DEFAULT_DIAGNOSES } from '../data/defaultData';
 
 export const ToothPad = ({
   activeCamp,
@@ -68,7 +68,7 @@ export const ToothPad = ({
       const isStillHealthy = Object.keys(nextTeeth).length === 0 && (exam.flags || []).length === 0 && exam.isAllClear;
 
       let nextNoteCode = exam.noteCode;
-      if (!isStillHealthy && nextNoteCode === 'HEALTHY') {
+      if (!isStillHealthy && (nextNoteCode === 'HEALTHY' || nextNoteCode === 'healthy')) {
         nextNoteCode = autoEval.noteCode || '';
       } else if (!nextNoteCode) {
         nextNoteCode = autoEval.noteCode || '';
@@ -95,7 +95,7 @@ export const ToothPad = ({
       const autoEval = evaluateClinicalState(exam.teeth || {}, nextFlags, false);
 
       let nextNoteCode = exam.noteCode;
-      if (nextNoteCode === 'HEALTHY' && (nextFlags.length > 0 || Object.keys(exam.teeth || {}).length > 0)) {
+      if ((nextNoteCode === 'HEALTHY' || nextNoteCode === 'healthy') && (nextFlags.length > 0 || Object.keys(exam.teeth || {}).length > 0)) {
         nextNoteCode = autoEval.noteCode || '';
       } else if (!nextNoteCode) {
         nextNoteCode = autoEval.noteCode || '';
@@ -129,7 +129,7 @@ export const ToothPad = ({
         teeth: {},
         flags: [],
         severity: 'G',
-        noteCode: 'HEALTHY'
+        noteCode: 'healthy'
       };
     });
   };
@@ -600,18 +600,34 @@ export const ToothPad = ({
                   </option>
                   {relevantAdviceOptions.map((tpl) => (
                     <option key={tpl.code} value={tpl.code}>
-                      {tpl.label} ({(activePatient.exam?.adviceLanguage || 'mr') === 'en' ? 'English' : 'मराठी'})
+                      {(activePatient.exam?.adviceLanguage || 'mr') === 'en'
+                        ? (tpl.labelEn || tpl.label)
+                        : (tpl.labelMr || tpl.label)} ({(activePatient.exam?.adviceLanguage || 'mr') === 'en' ? 'English' : 'मराठी'})
                     </option>
                   ))}
                 </select>
 
-                {activePatient.exam?.noteCode && ADVICE_TEMPLATES[activePatient.exam.noteCode] ? (
-                  <p className="text-[10.5px] text-slate-700 bg-slate-50 p-2.5 rounded-lg border border-slate-200 mt-1.5 font-medium leading-relaxed italic">
-                    "{activePatient.exam?.customNote ||
-                      ((activePatient.exam?.adviceLanguage || 'mr') === 'en'
-                        ? (ADVICE_TEMPLATES[activePatient.exam.noteCode]?.textEn || ADVICE_TEMPLATES[activePatient.exam.noteCode]?.adviceEn)
-                        : (ADVICE_TEMPLATES[activePatient.exam.noteCode]?.textMr || ADVICE_TEMPLATES[activePatient.exam.noteCode]?.adviceMr))}"
-                  </p>
+                {activePatient.exam?.noteCode ? (
+                  (() => {
+                    const match = resolveMasterAdvice(
+                      activePatient.exam.noteCode,
+                      allToothDiags,
+                      diagnosesList
+                    );
+                    const isEn = (activePatient.exam?.adviceLanguage || 'mr') === 'en';
+                    const activeText = activePatient.exam?.customNote ||
+                      (match ? (isEn ? match.adviceEn : match.adviceMr) : '');
+
+                    return activeText ? (
+                      <p className="text-[10.5px] text-slate-700 bg-slate-50 p-2.5 rounded-lg border border-slate-200 mt-1.5 font-medium leading-relaxed italic">
+                        "{activeText}"
+                      </p>
+                    ) : (
+                      <p className="text-[10.5px] text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200 mt-1.5 font-semibold">
+                        ℹ️ No advice text specified in master table for this diagnosis. (You can configure advice in Rules & Settings)
+                      </p>
+                    );
+                  })()
                 ) : (
                   <p className="text-[10.5px] text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200 mt-1.5 font-semibold">
                     {isExamined

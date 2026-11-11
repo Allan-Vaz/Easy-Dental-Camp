@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
 import { DentalChartSVG } from './DentalChartSVG';
-import { resolveClassRules, formatDisplayDate } from '../utils/clinicalEvaluator';
-import { ADVICE_TEMPLATES, DEFAULT_DIAGNOSES, DEFAULT_TOOTH_DIAGNOSES } from '../data/defaultData';
+import { resolveClassRules, formatDisplayDate, resolveMasterAdvice } from '../utils/clinicalEvaluator';
+import { DEFAULT_DIAGNOSES, DEFAULT_TOOTH_DIAGNOSES } from '../data/defaultData';
 
 export const DefaultAvmLogoBadge = ({ size = 'md' }) => (
   <div className={`flex items-center gap-1.5 select-none ${size === 'sm' ? 'scale-90' : ''}`}>
@@ -93,7 +93,9 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], toothDi
     }
   }, [targetWaUrl, camp?.customQrData]);
 
-  const adviceObj = ADVICE_TEMPLATES[exam.noteCode] || ADVICE_TEMPLATES.HEALTHY;
+  const resolvedAdvice = resolveMasterAdvice(exam.noteCode, allToothDiags, diagnosesList);
+  const adviceEn = resolvedAdvice?.adviceEn || '';
+  const adviceMr = resolvedAdvice?.adviceMr || '';
 
   // Active check IDs from Rule Group + extra flagged items
   const ruleCheckIds =
@@ -341,8 +343,8 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], toothDi
                   {exam.customNote
                     ? exam.customNote
                     : ((exam.adviceLanguage || 'mr') === 'en'
-                      ? (adviceObj.textEn || adviceObj.adviceEn)
-                      : (adviceObj.textMr || adviceObj.adviceMr))}
+                      ? (adviceEn || adviceMr)
+                      : (adviceMr || adviceEn))}
                 </p>
               </div>
               <div className="w-24 border border-dashed border-[#1B2F5A] rounded p-0.5 text-center bg-white shrink-0">

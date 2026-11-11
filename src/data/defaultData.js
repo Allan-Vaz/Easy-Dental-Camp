@@ -35,6 +35,14 @@ export const DEFAULT_TOOTH_DIAGNOSES = [
 
 export const DEFAULT_DIAGNOSES = [
   {
+    id: 'healthy',
+    labelEn: 'Healthy Smile / Routine Habits',
+    labelMr: 'निरोगी दात (दातांची निगा व सवयी)',
+    defaultSeverity: 'Healthy',
+    adviceEn: "Congratulations! Your child's teeth are completely healthy. To maintain this great oral health, brush twice daily (morning & night), rinse thoroughly after sweets, and continue routine 6-month dental checkups.",
+    adviceMr: 'अभिनंदन! तुमच्या पाल्याचे दात पूर्णपणे निरोगी आहेत. हे उत्तम आरोग्य टिकवण्यासाठी दिवसातून दोनदा (सकाळी व रात्री) ब्रश करा, गोड पदार्थ खाल्ल्यावर खळखळून गुळण्या करा आणि दर ६ महिन्यांनी दातांची नियमित तपासणी करा.'
+  },
+  {
     id: 'cavities',
     labelEn: 'Cavities Detected',
     labelMr: 'किडलेले दात',

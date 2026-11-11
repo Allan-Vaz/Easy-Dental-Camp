@@ -1,4 +1,4 @@
-import { DEFAULT_RULE_GROUPS, ADVICE_TEMPLATES } from '../data/defaultData';
+import { DEFAULT_RULE_GROUPS, DEFAULT_TOOTH_DIAGNOSES, DEFAULT_DIAGNOSES } from '../data/defaultData';
 
 /**
  * Returns tooth labels from midline outward.
@@ -56,25 +56,37 @@ export const evaluateClinicalState = (teethMap = {}, flags = [], isAllClear = fa
 
   if (hasRedCavity || yellowCavityCount >= 2) {
     severity = 'R';
-    noteCode = 'URG_FILL';
-  } else if (yellowCavityCount === 1 || nextFlags.has('cavities')) {
+    noteCode = 'C_R';
+  } else if (yellowCavityCount === 1) {
     severity = 'Y';
-    noteCode = 'URG_FILL';
-  } else if (nextFlags.has('milk_tooth') || hasRetained) {
+    noteCode = 'C_Y';
+  } else if (nextFlags.has('cavities')) {
+    severity = 'R';
+    noteCode = 'cavities';
+  } else if (hasRetained) {
     severity = 'Y';
-    noteCode = 'MILK_CARE';
+    noteCode = 'R';
+  } else if (nextFlags.has('milk_tooth')) {
+    severity = 'Y';
+    noteCode = 'milk_tooth';
   } else if (nextFlags.has('alignment')) {
     severity = 'Y';
-    noteCode = 'BRACES_ALIGN';
+    noteCode = 'alignment';
   } else if (nextFlags.has('gums')) {
     severity = 'Y';
-    noteCode = 'GUM_CARE';
-  } else if (nextFlags.has('tartar') || nextFlags.has('stains') || nextFlags.size > 0 || toothValues.length > 0) {
+    noteCode = 'gums';
+  } else if (nextFlags.has('tartar')) {
     severity = 'Y';
-    noteCode = 'CLEAN_ALIGN';
+    noteCode = 'tartar';
+  } else if (nextFlags.has('stains')) {
+    severity = 'Y';
+    noteCode = 'stains';
+  } else if (nextFlags.size > 0) {
+    severity = 'Y';
+    noteCode = Array.from(nextFlags)[0];
   } else if (isAllClear) {
     severity = 'G';
-    noteCode = 'HEALTHY';
+    noteCode = 'healthy';
   }
 
   return {
@@ -85,79 +97,152 @@ export const evaluateClinicalState = (teethMap = {}, flags = [], isAllClear = fa
 };
 
 /**
- * Returns strictly the advice templates matching detected issues or healthy state.
+ * Resolves the advice object (with adviceEn, adviceMr, labelEn, labelMr) from the master tables.
  */
-export const getRelevantAdviceOptions = (teethMap = {}, flags = [], isAllClear = false, toothDiagnosesList = [], diagnosesList = []) => {
+export const resolveMasterAdvice = (noteCode, toothDiagnosesList = [], diagnosesList = []) => {
+  if (!noteCode) return null;
+
+  // Normalized legacy code mapping for backwards compatibility with any existing saved patient
+  const legacyMap = {
+    URG_FILL: 'cavities',
+    CLEAN_ALIGN: 'tartar',
+    BRACES_ALIGN: 'alignment',
+    MILK_CARE: 'milk_tooth',
+    GUM_CARE: 'gums',
+    HEALTHY: 'healthy'
+  };
+  const targetId = legacyMap[noteCode] || noteCode;
+
+  const safeToothDiags = Array.isArray(toothDiagnosesList) && toothDiagnosesList.length > 0
+    ? toothDiagnosesList
+    : DEFAULT_TOOTH_DIAGNOSES;
+  const safeChecks = Array.isArray(diagnosesList) && diagnosesList.length > 0
+    ? diagnosesList
+    : DEFAULT_DIAGNOSES;
+
+  // 1. Check Table 1: Master Tooth Diagnoses
+  const toothMatch = safeToothDiags.find((d) => d.id === targetId || d.id === noteCode);
+  if (toothMatch) {
+    return {
+      code: toothMatch.id,
+      source: 'tooth',
+      labelEn: toothMatch.name,
+      labelMr: toothMatch.name,
+      adviceEn: toothMatch.adviceEn || '',
+      adviceMr: toothMatch.adviceMr || ''
+    };
+  }
+
+  // 2. Check Table 2: Master Checklist Diagnoses
+  const checkMatch = safeChecks.find((d) => d.id === targetId || d.id === noteCode);
+  if (checkMatch) {
+    return {
+      code: checkMatch.id,
+      source: 'checklist',
+      labelEn: checkMatch.labelEn,
+      labelMr: checkMatch.labelMr || checkMatch.labelEn,
+      adviceEn: checkMatch.adviceEn || '',
+      adviceMr: checkMatch.adviceMr || ''
+    };
+  }
+
+  // 3. Fallback for healthy
+  if (targetId === 'healthy' || targetId === 'HEALTHY') {
+    const fallbackHealthy = safeChecks.find((d) => d.id === 'healthy') || DEFAULT_DIAGNOSES.find((d) => d.id === 'healthy');
+    if (fallbackHealthy) {
+      return {
+        code: 'healthy',
+        source: 'healthy',
+        labelEn: fallbackHealthy.labelEn,
+        labelMr: fallbackHealthy.labelMr || fallbackHealthy.labelEn,
+        adviceEn: fallbackHealthy.adviceEn || '',
+        adviceMr: fallbackHealthy.adviceMr || ''
+      };
+    }
+  }
+
+  return null;
+};
+
+/**
+ * Returns strictly the advice options matching detected issues or healthy state,
+ * picked directly from Master Table 1 (tooth diagnoses) and Master Table 2 (checklist).
+ */
+export const getRelevantAdviceOptions = (
+  teethMap = {},
+  flags = [],
+  isAllClear = false,
+  toothDiagnosesList = [],
+  diagnosesList = []
+) => {
   const toothValues = Object.values(teethMap || {});
   const flagSet = new Set(flags || []);
+  const safeToothDiags = Array.isArray(toothDiagnosesList) && toothDiagnosesList.length > 0
+    ? toothDiagnosesList
+    : DEFAULT_TOOTH_DIAGNOSES;
+  const safeChecks = Array.isArray(diagnosesList) && diagnosesList.length > 0
+    ? diagnosesList
+    : DEFAULT_DIAGNOSES;
+
   const options = [];
 
   // If marked explicitly All Clear / Healthy Smile
   if (isAllClear) {
-    if (ADVICE_TEMPLATES.HEALTHY) {
-      options.push(ADVICE_TEMPLATES.HEALTHY);
+    const healthyDiag = safeChecks.find((d) => d.id === 'healthy') || DEFAULT_DIAGNOSES.find((d) => d.id === 'healthy');
+    if (healthyDiag) {
+      options.push({
+        code: 'healthy',
+        source: 'healthy',
+        label: healthyDiag.labelEn,
+        labelEn: healthyDiag.labelEn,
+        labelMr: healthyDiag.labelMr || healthyDiag.labelEn,
+        adviceEn: healthyDiag.adviceEn || '',
+        adviceMr: healthyDiag.adviceMr || '',
+        textEn: healthyDiag.adviceEn || '',
+        textMr: healthyDiag.adviceMr || ''
+      });
     }
     return options;
   }
 
-  const hasCavity = toothValues.includes('C_R') || toothValues.includes('C_Y') || flagSet.has('cavities');
-  const hasCleaning = flagSet.has('tartar') || flagSet.has('stains');
-  const hasAlignment = flagSet.has('alignment');
-  const hasMilkTooth = toothValues.includes('R') || flagSet.has('milk_tooth');
-  const hasGums = flagSet.has('gums');
+  // 1. From Table 1: Gather all tooth diagnoses detected on the tooth chart
+  const distinctToothDiagIds = Array.from(new Set(toothValues));
+  distinctToothDiagIds.forEach((diagId) => {
+    const matched = safeToothDiags.find((d) => d.id === diagId);
+    if (matched && (matched.adviceEn || matched.adviceMr)) {
+      options.push({
+        code: matched.id,
+        source: 'tooth',
+        label: `${matched.name} (Tooth Chart)`,
+        labelEn: matched.name,
+        labelMr: matched.name,
+        adviceEn: matched.adviceEn || '',
+        adviceMr: matched.adviceMr || '',
+        textEn: matched.adviceEn || '',
+        textMr: matched.adviceMr || ''
+      });
+    }
+  });
 
-  if (hasCavity && ADVICE_TEMPLATES.URG_FILL) {
-    options.push(ADVICE_TEMPLATES.URG_FILL);
-  }
-  if (hasCleaning && ADVICE_TEMPLATES.CLEAN_ALIGN) {
-    options.push(ADVICE_TEMPLATES.CLEAN_ALIGN);
-  }
-  if (hasAlignment && ADVICE_TEMPLATES.BRACES_ALIGN) {
-    options.push(ADVICE_TEMPLATES.BRACES_ALIGN);
-  }
-  if (hasMilkTooth && ADVICE_TEMPLATES.MILK_CARE) {
-    options.push(ADVICE_TEMPLATES.MILK_CARE);
-  }
-  if (hasGums && ADVICE_TEMPLATES.GUM_CARE) {
-    options.push(ADVICE_TEMPLATES.GUM_CARE);
-  }
-
-  // Also check if any custom findings have advice
-  if (Array.isArray(toothDiagnosesList)) {
-    toothValues.forEach((tVal) => {
-      const match = toothDiagnosesList.find((d) => d.id === tVal);
-      if (match && (match.adviceMr || match.adviceEn)) {
-        if (!options.some((o) => o.code === match.id)) {
-          options.push({
-            code: match.id,
-            label: match.name,
-            labelMr: match.name,
-            labelEn: match.name,
-            textMr: match.adviceMr,
-            textEn: match.adviceEn
-          });
-        }
+  // 2. From Table 2: Gather all checklist diagnoses detected in checklist flags
+  flagSet.forEach((flagId) => {
+    const matched = safeChecks.find((d) => d.id === flagId);
+    if (matched && (matched.adviceEn || matched.adviceMr)) {
+      if (!options.some((o) => o.code === matched.id)) {
+        options.push({
+          code: matched.id,
+          source: 'checklist',
+          label: `${matched.labelEn} (Checklist)`,
+          labelEn: matched.labelEn,
+          labelMr: matched.labelMr || matched.labelEn,
+          adviceEn: matched.adviceEn || '',
+          adviceMr: matched.adviceMr || '',
+          textEn: matched.adviceEn || '',
+          textMr: matched.adviceMr || ''
+        });
       }
-    });
-  }
-
-  if (Array.isArray(diagnosesList)) {
-    flags.forEach((fId) => {
-      const match = diagnosesList.find((d) => d.id === fId);
-      if (match && (match.adviceMr || match.adviceEn)) {
-        if (!options.some((o) => o.code === match.id || o.code === match.labelEn)) {
-          options.push({
-            code: match.id,
-            label: match.labelEn,
-            labelMr: match.labelMr || match.labelEn,
-            labelEn: match.labelEn,
-            textMr: match.adviceMr,
-            textEn: match.adviceEn
-          });
-        }
-      }
-    });
-  }
+    }
+  });
 
   return options;
 };
