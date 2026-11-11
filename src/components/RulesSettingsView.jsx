@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Layers, Plus, Trash2, Check, Edit2, AlertCircle,
   Palette, Sparkles, X, CheckCircle2, ChevronRight,
@@ -27,7 +27,6 @@ export const RulesSettingsView = ({
   const [newGroupTeeth, setNewGroupTeeth] = useState(6);
 
   // Group editing state: { [groupId]: { name, teethPerQuad, newClassInput } }
-  const [editingGroupId, setEditingGroupId] = useState(null);
   const [classInputMap, setClassInputMap] = useState({});
 
   // New Tooth Diagnosis Form State
@@ -50,43 +49,64 @@ export const RulesSettingsView = ({
     adviceMr: ''
   });
 
-  const ruleGroups = activeCamp?.ruleGroups && activeCamp.ruleGroups.length > 0
-    ? activeCamp.ruleGroups
-    : DEFAULT_RULE_GROUPS;
+  // Safe Arrays (guaranteed to be arrays even if local storage has corrupt data)
+  const safeToothDiagnoses = useMemo(() => {
+    return Array.isArray(toothDiagnosesList) && toothDiagnosesList.length > 0
+      ? toothDiagnosesList
+      : DEFAULT_TOOTH_DIAGNOSES;
+  }, [toothDiagnosesList]);
+
+  const safeDiagnosesList = useMemo(() => {
+    return Array.isArray(diagnosesList) && diagnosesList.length > 0
+      ? diagnosesList
+      : DEFAULT_DIAGNOSES;
+  }, [diagnosesList]);
+
+  const ruleGroups = useMemo(() => {
+    return Array.isArray(activeCamp?.ruleGroups) && activeCamp.ruleGroups.length > 0
+      ? activeCamp.ruleGroups
+      : DEFAULT_RULE_GROUPS;
+  }, [activeCamp]);
 
   // Compute all unique classes from camp roster/patients
-  const allKnownClasses = React.useMemo(() => {
+  const allKnownClasses = useMemo(() => {
     const classSet = new Set();
     // From camp groups
-    (activeCamp?.groups || []).forEach((g) => {
-      if (g.id) classSet.add(g.id);
-    });
+    if (Array.isArray(activeCamp?.groups)) {
+      activeCamp.groups.forEach((g) => {
+        if (g && g.id) classSet.add(g.id);
+      });
+    }
     // From patients
-    campPatients.forEach((p) => {
-      if (p.groupId) classSet.add(p.groupId);
-    });
+    if (Array.isArray(campPatients)) {
+      campPatients.forEach((p) => {
+        if (p && p.groupId) classSet.add(p.groupId);
+      });
+    }
     // From current rule groups
     ruleGroups.forEach((rg) => {
-      (rg.classes || []).forEach((c) => classSet.add(c));
+      if (Array.isArray(rg?.classes)) {
+        rg.classes.forEach((c) => classSet.add(c));
+      }
     });
     return Array.from(classSet).sort();
   }, [activeCamp, campPatients, ruleGroups]);
 
   // Compute which classes are currently unassigned to any rule group
-  const unassignedClasses = React.useMemo(() => {
-    const assigned = new Set(ruleGroups.flatMap((rg) => rg.classes || []));
+  const unassignedClasses = useMemo(() => {
+    const assigned = new Set(ruleGroups.flatMap((rg) => (Array.isArray(rg?.classes) ? rg.classes : [])));
     return allKnownClasses.filter((c) => !assigned.has(c));
   }, [allKnownClasses, ruleGroups]);
 
   // Handler: Strict 1-group-per-class assignment
   const handleAssignClass = (targetGroupId, className) => {
-    const cleanName = className.trim();
+    const cleanName = String(className || '').trim();
     if (!cleanName) return;
 
     const nextGroups = ruleGroups.map((rg) => {
       // Strip class from all other groups
-      const stripped = (rg.classes || []).filter(
-        (c) => c.toLowerCase() !== cleanName.toLowerCase()
+      const stripped = (Array.isArray(rg.classes) ? rg.classes : []).filter(
+        (c) => String(c).toLowerCase() !== cleanName.toLowerCase()
       );
       if (rg.id === targetGroupId) {
         return {
@@ -110,7 +130,7 @@ export const RulesSettingsView = ({
       if (rg.id === groupId) {
         return {
           ...rg,
-          classes: (rg.classes || []).filter((c) => c !== className)
+          classes: (Array.isArray(rg.classes) ? rg.classes : []).filter((c) => c !== className)
         };
       }
       return rg;
@@ -138,7 +158,9 @@ export const RulesSettingsView = ({
   const handleToggleToothDiagForGroup = (groupId, toothDiagId) => {
     const nextGroups = ruleGroups.map((rg) => {
       if (rg.id === groupId) {
-        const current = rg.activeToothDiagnoses || (toothDiagnosesList || DEFAULT_TOOTH_DIAGNOSES).map((d) => d.id);
+        const current = Array.isArray(rg.activeToothDiagnoses)
+          ? rg.activeToothDiagnoses
+          : safeToothDiagnoses.map((d) => d.id);
         const next = current.includes(toothDiagId)
           ? current.filter((id) => id !== toothDiagId)
           : [...current, toothDiagId];
@@ -156,7 +178,9 @@ export const RulesSettingsView = ({
   const handleToggleChecklistDiagForGroup = (groupId, chkId) => {
     const nextGroups = ruleGroups.map((rg) => {
       if (rg.id === groupId) {
-        const current = rg.activeChecks || (diagnosesList || DEFAULT_DIAGNOSES).map((d) => d.id);
+        const current = Array.isArray(rg.activeChecks)
+          ? rg.activeChecks
+          : safeDiagnosesList.map((d) => d.id);
         const next = current.includes(chkId)
           ? current.filter((id) => id !== chkId)
           : [...current, chkId];
@@ -180,8 +204,8 @@ export const RulesSettingsView = ({
       name: newGroupName.trim(),
       teethPerQuad: Number(newGroupTeeth) || 6,
       classes: [],
-      activeToothDiagnoses: (toothDiagnosesList || DEFAULT_TOOTH_DIAGNOSES).map((d) => d.id),
-      activeChecks: (diagnosesList || DEFAULT_DIAGNOSES).map((d) => d.id)
+      activeToothDiagnoses: safeToothDiagnoses.map((d) => d.id),
+      activeChecks: safeDiagnosesList.map((d) => d.id)
     };
 
     updateCampRuleGroups([...ruleGroups, newGroup]);
@@ -225,7 +249,7 @@ export const RulesSettingsView = ({
               Camp Rules & Master Diagnoses
             </span>
             <span className="text-xs font-bold text-slate-500">
-              Institute: <strong className="text-[#1B2F5A]">{activeCamp?.instituteName}</strong>
+              Institute: <strong className="text-[#1B2F5A]">{activeCamp?.instituteName || 'Dental Camp'}</strong>
             </span>
           </div>
           <h1 className="text-xl font-black text-[#1B2F5A] mt-1">
@@ -263,7 +287,7 @@ export const RulesSettingsView = ({
               activeSection === 'tooth' ? 'bg-[#1B2F5A] text-white shadow' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            2. Tooth Findings ({toothDiagnosesList.length})
+            2. Tooth Findings ({safeToothDiagnoses.length})
           </button>
           <button
             type="button"
@@ -272,7 +296,7 @@ export const RulesSettingsView = ({
               activeSection === 'checklist' ? 'bg-[#1B2F5A] text-white shadow' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            3. Checklist Master ({diagnosesList.length})
+            3. Checklist Master ({safeDiagnosesList.length})
           </button>
         </div>
       </div>
@@ -385,10 +409,14 @@ export const RulesSettingsView = ({
           {/* Rule Groups Cards List */}
           <div className="grid grid-cols-1 gap-5">
             {ruleGroups.map((rg) => {
-              const currentTeeth = Number(rg.teethPerQuad) || 6;
-              const groupClasses = rg.classes || [];
-              const groupActiveToothDiags = rg.activeToothDiagnoses || (toothDiagnosesList || DEFAULT_TOOTH_DIAGNOSES).map((d) => d.id);
-              const groupActiveChecks = rg.activeChecks || (diagnosesList || DEFAULT_DIAGNOSES).map((d) => d.id);
+              const currentTeeth = Number(rg?.teethPerQuad) || 6;
+              const groupClasses = Array.isArray(rg?.classes) ? rg.classes : [];
+              const groupActiveToothDiags = Array.isArray(rg?.activeToothDiagnoses)
+                ? rg.activeToothDiagnoses
+                : safeToothDiagnoses.map((d) => d.id);
+              const groupActiveChecks = Array.isArray(rg?.activeChecks)
+                ? rg.activeChecks
+                : safeDiagnosesList.map((d) => d.id);
 
               return (
                 <div
@@ -407,7 +435,7 @@ export const RulesSettingsView = ({
                         </label>
                         <input
                           type="text"
-                          value={rg.name}
+                          value={rg.name || ''}
                           onChange={(e) => handleUpdateGroupMeta(rg.id, 'name', e.target.value)}
                           className="font-black text-sm text-[#1B2F5A] border-b border-dashed border-slate-300 focus:border-[#1B2F5A] bg-transparent outline-none w-full"
                           placeholder="Group Name..."
@@ -558,7 +586,7 @@ export const RulesSettingsView = ({
                         Only checked findings will appear when tapping a tooth for students in this group.
                       </p>
                       <div className="flex flex-wrap gap-1.5">
-                        {(toothDiagnosesList || DEFAULT_TOOTH_DIAGNOSES).map((td) => {
+                        {safeToothDiagnoses.map((td) => {
                           const isActive = groupActiveToothDiags.includes(td.id);
                           return (
                             <button
@@ -597,7 +625,7 @@ export const RulesSettingsView = ({
                         Only checked boxes will appear in the doctor's screening checklist for this group.
                       </p>
                       <div className="flex flex-wrap gap-1.5">
-                        {(diagnosesList || DEFAULT_DIAGNOSES).map((diag) => {
+                        {safeDiagnosesList.map((diag) => {
                           const isActive = groupActiveChecks.includes(diag.id);
                           return (
                             <button
@@ -790,13 +818,13 @@ export const RulesSettingsView = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 bg-white">
-                {(toothDiagnosesList || DEFAULT_TOOTH_DIAGNOSES).map((item) => (
+                {safeToothDiagnoses.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50/70 transition">
                     {/* Diagnosis Name */}
                     <td className="py-2.5 px-3 font-bold text-slate-800 min-w-[150px]">
                       <input
                         type="text"
-                        value={item.name}
+                        value={item.name || ''}
                         onChange={(e) =>
                           saveToothDiagnosis({ ...item, name: e.target.value })
                         }
@@ -1048,7 +1076,7 @@ export const RulesSettingsView = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 bg-white">
-                {(diagnosesList || DEFAULT_DIAGNOSES).map((item) => (
+                {safeDiagnosesList.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50/70 transition">
                     {/* English Name */}
                     <td className="py-2.5 px-3 font-bold text-slate-800 min-w-[150px]">

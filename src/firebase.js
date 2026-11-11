@@ -64,13 +64,28 @@ const STORAGE_KEYS = {
   CAMPS: 'avm_dental_camps_v1',
   PATIENTS: 'avm_dental_patients_v1',
   STAFF: 'avm_dental_staff_v1',
-  DIAGNOSES: 'avm_dental_diagnoses_v1'
+  DIAGNOSES: 'avm_dental_diagnoses_v1',
+  TOOTH_DIAGNOSES: 'avm_dental_tooth_diagnoses_v1',
+  CLINIC_PROFILE: 'avm_dental_clinic_profile_v1'
 };
 
 export const loadLocalFallback = (key, defaultData) => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS[key]);
-    if (raw) return JSON.parse(raw);
+    const storageKey = STORAGE_KEYS[key] || `avm_${String(key).toLowerCase()}_v1`;
+    const raw = localStorage.getItem(storageKey);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // Validate that arrays stay arrays and objects stay objects
+      if (Array.isArray(defaultData)) {
+        return Array.isArray(parsed) ? parsed : defaultData;
+      }
+      if (typeof defaultData === 'object' && defaultData !== null) {
+        return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+          ? parsed
+          : defaultData;
+      }
+      return parsed;
+    }
   } catch (err) {
     console.warn(`Error reading ${key} from localStorage:`, err);
   }
@@ -79,7 +94,8 @@ export const loadLocalFallback = (key, defaultData) => {
 
 export const saveLocalFallback = (key, data) => {
   try {
-    localStorage.setItem(STORAGE_KEYS[key], JSON.stringify(data));
+    const storageKey = STORAGE_KEYS[key] || `avm_${String(key).toLowerCase()}_v1`;
+    localStorage.setItem(storageKey, JSON.stringify(data));
   } catch (err) {
     console.warn(`Error saving ${key} to localStorage:`, err);
   }

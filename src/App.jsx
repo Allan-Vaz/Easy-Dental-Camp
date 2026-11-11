@@ -53,6 +53,14 @@ export default function App() {
 
   // Auto-save to LocalStorage on every change for 100% offline persistence
   useEffect(() => {
+    try {
+      localStorage.removeItem('undefined');
+    } catch (e) {
+      console.warn(e);
+    }
+  }, []);
+
+  useEffect(() => {
     saveLocalFallback('CLINIC_PROFILE', clinicProfile);
   }, [clinicProfile]);
 
