@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Building2, Upload, Trash2, X, Check, Phone, MapPin, Sparkles } from 'lucide-react';
+import { Building2, Upload, Trash2, X, Check, Phone, MapPin, Sparkles, Image as ImageIcon } from 'lucide-react';
 import { DefaultAvmLogoBadge } from './A5ReportCard';
 
 export const ClinicSettingsModal = ({
@@ -215,6 +215,45 @@ export const ClinicSettingsModal = ({
                     className="p-1.5 text-red-600 hover:bg-red-50 rounded"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Voucher Promotional Banner Graphic */}
+            <div className="col-span-1 sm:col-span-2 p-3 rounded-xl border border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-16 h-14 rounded-lg bg-white border border-slate-200 flex items-center justify-center overflow-hidden shrink-0 shadow-sm p-1">
+                  {form.voucherPromoImageData ? (
+                    <img src={form.voucherPromoImageData} alt="Promo Graphic" className="w-full h-full object-contain" />
+                  ) : (
+                    <ImageIcon className="w-6 h-6 text-slate-300" />
+                  )}
+                </div>
+                <div>
+                  <div className="font-bold text-slate-800 text-xs">Voucher Promotional Graphic / Image</div>
+                  <div className="text-[10px] text-slate-500">
+                    Appears right-aligned in the top Navy Blue section of the tear-away voucher.
+                  </div>
+                  <div className="text-[9.5px] text-amber-700 font-medium mt-0.5">
+                    💡 Tip: PNG or JPG, 4:3 (e.g. 600×450px) or Square ratio, under 2 MB.
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                <label className="px-3 py-1.5 rounded-lg bg-[#1B2F5A] text-white text-[11px] font-bold cursor-pointer hover:bg-slate-800 transition shadow-sm flex items-center gap-1">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Upload Graphic</span>
+                  <input type="file" accept="image/*" onChange={handleImageUpload('voucherPromoImageData')} className="hidden" />
+                </label>
+                {form.voucherPromoImageData && (
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, voucherPromoImageData: '' })}
+                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition"
+                    title="Remove graphic"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 )}
               </div>

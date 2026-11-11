@@ -293,6 +293,7 @@ export const DEFAULT_CLINIC_PROFILE = {
   doctorRegNo: 'Reg. No. A-28491',
   defaultOfferMarathi: 'मोफत कुटुंब तपासणी + ५०% सूट!',
   defaultOfferEnglish: 'FREE Family Consultation + 50% OFF Scaling & Cleaning for entire family',
-  defaultVoucherDays: 30
+  defaultVoucherDays: 30,
+  voucherPromoImageData: ''
 };
 
