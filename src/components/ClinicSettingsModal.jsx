@@ -184,23 +184,35 @@ export const ClinicSettingsModal = ({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
-                <label className="block text-slate-600 mb-1">English Offer - Line 1 (Large Bold White)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-600 font-bold text-[11px]">English Offer - Line 1</label>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {(form.defaultOfferEnglishLine1 || '').length}/41
+                  </span>
+                </div>
                 <input
                   type="text"
+                  maxLength={41}
                   value={form.defaultOfferEnglishLine1 ?? 'FREE Family Consultation'}
-                  onChange={(e) => setForm({ ...form, defaultOfferEnglishLine1: e.target.value })}
+                  onChange={(e) => setForm({ ...form, defaultOfferEnglishLine1: e.target.value.slice(0, 41) })}
                   placeholder="FREE Family Consultation"
                   className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold text-[#1B2F5A]"
                 />
               </div>
               <div>
-                <label className="block text-slate-600 mb-1">English Offer - Line 2 (Subhead)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-600 font-bold text-[11px]">English Offer - Line 2</label>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {(form.defaultOfferEnglishLine2 || '').length}/41
+                  </span>
+                </div>
                 <input
                   type="text"
+                  maxLength={41}
                   value={form.defaultOfferEnglishLine2 ?? '+ 50% OFF Scaling & Cleaning for entire family'}
-                  onChange={(e) => setForm({ ...form, defaultOfferEnglishLine2: e.target.value })}
+                  onChange={(e) => setForm({ ...form, defaultOfferEnglishLine2: e.target.value.slice(0, 41) })}
                   placeholder="+ 50% OFF Scaling & Cleaning for entire family"
-                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300"
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-medium"
                 />
               </div>
             </div>

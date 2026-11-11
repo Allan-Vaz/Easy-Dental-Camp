@@ -47,6 +47,18 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicP
   const voucherPromoGraphic =
     clinicProfile?.voucherPromoImageData || camp?.voucherPromoImageData || camp?.mascotImageData;
 
+  // Promotional Offer Texts (Master Clinic Profile takes precedence, with camp fallback)
+  const marathiOffer =
+    clinicProfile?.defaultOfferMarathi || camp?.offerTextMarathi || 'मोफत कुटुंब तपासणी + ५०% सूट!';
+  const englishOfferLine1 = (
+    clinicProfile?.defaultOfferEnglishLine1 || 'FREE Family Consultation'
+  ).slice(0, 41);
+  const englishOfferLine2 = (
+    clinicProfile?.defaultOfferEnglishLine2 ||
+    camp?.offerTextEnglish ||
+    '+ 50% OFF Scaling & Cleaning for entire family'
+  ).slice(0, 41);
+
   // Detect positive findings on anatomical chart
   const teethValues = Object.values(exam.teeth || {});
   const hasDeepCavity = teethValues.includes('C_R');
@@ -384,52 +396,51 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicP
             <div className="absolute inset-1 border border-dashed border-white/15 rounded-xl pointer-events-none"></div>
 
             {/* Left Side: 3 Horizontal Sub-segments */}
-            <div className="flex-1 min-w-0 h-full flex flex-col justify-between py-0.5 relative z-10 pr-1">
-              {/* Horizontal Sub-segment 1: Marathi Promotional Line (Vibrant Crimson Red 3D Shadow) */}
-              <div className="flex-1 flex items-center min-h-0">
+            <div className="flex-1 min-w-0 h-full flex flex-col justify-between py-0.5 relative z-10 pr-2">
+              {/* Horizontal Sub-segment 1: Marathi Promotional Line (Crimson Red 3D Shadow, Descenders Protected) */}
+              <div className="flex-1 flex items-center min-h-0 overflow-visible py-0.5">
                 <div
-                  className="text-[21px] font-black text-[#FEF08A] tracking-tight leading-tight line-clamp-2"
+                  className="text-[20px] font-black text-[#FEF08A] tracking-tight leading-[1.28] pb-1"
                   style={{
                     textShadow: '2px 2px 0px #b91c1c, 4px 4px 0px #7f1d1d, 0 0 16px rgba(254,240,138,0.45)'
                   }}
                 >
-                  {camp?.offerTextMarathi || clinicProfile?.defaultOfferMarathi || 'मोफत कुटुंब तपासणी + ५०% सूट!'}
+                  {marathiOffer}
                 </div>
               </div>
 
-              {/* Horizontal Sub-segment 2: English Promotional Line (2 Dedicated Lines with Royal Cobalt 3D Shadow) */}
-              <div className="flex-1 flex flex-col justify-center min-h-0 py-0.5">
+              {/* Horizontal Sub-segment 2: English Promotional Line (Center-aligned, Both Lines Pure White, Max 41 Chars) */}
+              <div className="flex-1 flex flex-col items-center justify-center text-center min-h-0 py-0.5 overflow-visible">
                 <div
-                  className="text-[15.5px] font-black text-white tracking-wide leading-tight truncate"
+                  className="text-[15px] font-black text-white tracking-wide leading-tight truncate max-w-full"
                   style={{
                     textShadow: '1.5px 1.5px 0px #0e244d, 3px 3px 0px #071329, 0 2px 8px rgba(0,0,0,0.7)'
                   }}
                 >
-                  {clinicProfile?.defaultOfferEnglishLine1 || 'FREE Family Consultation'}
+                  {englishOfferLine1}
                 </div>
                 <div
-                  className="text-[13.5px] font-extrabold text-amber-200 tracking-wide leading-tight mt-0.5 truncate"
+                  className="text-[13px] font-black text-white tracking-wide leading-tight mt-1 truncate max-w-full"
                   style={{
                     textShadow: '1.5px 1.5px 0px #0e244d, 3px 3px 0px #071329, 0 2px 8px rgba(0,0,0,0.7)'
                   }}
                 >
-                  {clinicProfile?.defaultOfferEnglishLine2 || '+ 50% OFF Scaling & Cleaning for entire family'}
+                  {englishOfferLine2}
                 </div>
               </div>
 
-              {/* Horizontal Sub-segment 3: Valid Till Date Pill (Continuous Yellow Background, Stacked Labels, Navy Date) */}
+              {/* Horizontal Sub-segment 3: Valid Till Date Pill (Shorter by ~1/3rd, No Calendar Icon, Continuous Yellow) */}
               <div className="flex-1 flex items-center min-h-0 pt-0.5">
-                <div className="w-full h-full max-h-[36px] px-3.5 py-1 rounded-xl bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300 text-[#1B2F5A] border-2 border-white shadow-lg flex items-center justify-between font-black">
+                <div className="w-[68%] max-w-[240px] h-full max-h-[34px] px-3.5 py-1 rounded-xl bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300 text-[#1B2F5A] border-2 border-white shadow-lg flex items-center justify-between font-black">
                   <div className="flex flex-col leading-none">
-                    <span className="text-[9.5px] font-black tracking-tight text-[#1B2F5A] uppercase flex items-center gap-1">
-                      <span>📅</span>
-                      <span>सवलत वैधता</span>
+                    <span className="text-[9.5px] font-black tracking-tight text-[#1B2F5A] uppercase">
+                      सवलत वैधता
                     </span>
                     <span className="text-[7.5px] font-black text-[#1B2F5A]/85 uppercase tracking-wider mt-0.5">
                       OFFER VALID TILL:
                     </span>
                   </div>
-                  <div className="text-[14px] font-black text-[#1B2F5A] font-mono tracking-wide">
+                  <div className="text-[13px] font-black text-[#1B2F5A] font-mono tracking-wide pl-2">
                     {formatDisplayDate(camp?.voucherExpiryDate)}
                   </div>
                 </div>
