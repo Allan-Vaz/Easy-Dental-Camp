@@ -352,7 +352,7 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicP
       </div>
 
       {/* ======================================================= */}
-      {/* BOTTOM SECTION: REDESIGNED TEAR-AWAY FAMILY VOUCHER     */}
+      {/* BOTTOM SECTION: DYNAMIC HIGH-IMPACT FAMILY VOUCHER     */}
       {/* ======================================================= */}
       <div className="flex-1 flex flex-col bg-white border-t-2 border-dashed border-[#E52629] overflow-hidden min-h-0">
         {/* Perforation Strip Header */}
@@ -365,83 +365,134 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicP
           </div>
         </div>
 
-        {/* Voucher Body: Split into 60% Navy Blue & 40% Brand Red */}
+        {/* Top Gold Privilege Ribbon */}
+        <div className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 px-3 py-0.5 flex items-center justify-between text-[8px] font-black text-[#1B2F5A] tracking-wide border-b border-amber-500/40 shrink-0 shadow-xs">
+          <div className="flex items-center gap-1.5">
+            <span>🏷️</span>
+            <span className="uppercase tracking-wider">Exclusive Family Privilege Voucher • खास शालेय सवलत कूपन</span>
+          </div>
+          <div className="font-black text-[7px] bg-[#1B2F5A] text-[#FEF08A] px-2 py-0.5 rounded-full uppercase tracking-wider">
+            For Student's Entire Family
+          </div>
+        </div>
+
+        {/* Voucher Body: Split into Upper Navy & Lower Red */}
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-          {/* Top 60%: Brand Navy Blue (#1B2F5A) */}
-          <div className="h-[60%] bg-[#1B2F5A] px-3.5 py-2 flex items-center justify-between gap-3 text-white overflow-hidden">
-            {/* Left Side: Promotional Message (Yellow Marathi & White English) */}
-            <div className="flex-1 min-w-0 flex flex-col justify-center">
-              <div className="text-[16px] font-black text-[#FEF08A] tracking-tight leading-tight line-clamp-2 drop-shadow-sm">
-                {camp?.offerTextMarathi || clinicProfile?.defaultOfferMarathi || 'मोफत कुटुंब तपासणी + ५०% सूट!'}
+          {/* Top Zone (~62% height): Brand Navy Blue (#1B2F5A) */}
+          <div className="h-[62%] bg-[#1B2F5A] px-3.5 py-2.5 flex items-center justify-between gap-3 text-white overflow-hidden relative">
+            {/* Subtle decorative inner border */}
+            <div className="absolute inset-1 border border-dashed border-white/15 rounded-xl pointer-events-none"></div>
+
+            {/* Left Side: Dynamic Typographic Offer Hierarchy */}
+            <div className="flex-1 min-w-0 flex flex-col justify-center relative z-10">
+              {/* Massive Marathi Headline */}
+              <div className="text-[21px] font-black text-[#FEF08A] tracking-tight leading-none drop-shadow-md">
+                मोफत कुटुंब दंत तपासणी!
               </div>
-              <div className="text-[10.5px] font-extrabold text-white leading-snug mt-1 line-clamp-2 opacity-95">
-                {camp?.offerTextEnglish ||
-                  clinicProfile?.defaultOfferEnglish ||
-                  'FREE Family Consultation + 50% OFF Scaling & Cleaning for entire family'}
+
+              {/* Bold 50% Discount Badge */}
+              <div className="inline-flex items-center gap-2 mt-2 self-start bg-gradient-to-r from-[#E52629] to-[#be123c] text-white px-2.5 py-1 rounded-lg border border-red-300/80 shadow-md">
+                <span className="text-[13px] font-black text-[#FEF08A] uppercase tracking-wide">
+                  💥 ५०% सवलत! (50% OFF)
+                </span>
+                <span className="text-[9.5px] font-extrabold text-white">
+                  Scaling & Cleaning / दातांची स्वच्छता
+                </span>
               </div>
-              <div className="mt-1.5 flex items-center">
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/15 border border-white/30 text-white backdrop-blur-sm shadow-sm">
-                  <span className="text-[7.5px] text-amber-300 font-extrabold">📅 वैधता / Valid Until:</span>
-                  <span className="text-[8.5px] font-black text-white">{formatDisplayDate(camp?.voucherExpiryDate)}</span>
+
+              {/* 3 Benefit Feature Pills */}
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                <span className="px-2 py-0.5 rounded-full bg-white/15 border border-white/25 text-white text-[8px] font-extrabold backdrop-blur-xs">
+                  ✓ सर्व कुटुंबीयांसाठी (Entire Family)
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-white/15 border border-white/25 text-white text-[8px] font-extrabold backdrop-blur-xs">
+                  ✓ मोफत तपासणी (Free Checkup)
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-white/15 border border-white/25 text-white text-[8px] font-extrabold backdrop-blur-xs">
+                  ✓ तज्ज्ञ सल्ला (Expert Care)
+                </span>
+              </div>
+
+              {/* Urgency Expiry Pill */}
+              <div className="mt-2 flex items-center">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/20 border border-amber-300/50 text-white shadow-sm">
+                  <span className="text-[8px] text-amber-300 font-extrabold">⏳ ऑफर वैधता / Valid Until:</span>
+                  <span className="text-[9px] font-black text-[#FEF08A]">{formatDisplayDate(camp?.voucherExpiryDate)}</span>
                 </span>
               </div>
             </div>
 
-            {/* Right Side: Uploaded Promotional Graphic (~38% width, right aligned) */}
-            <div className="w-[38%] max-w-[150px] h-full flex items-center justify-end shrink-0 pl-1">
-              {voucherPromoGraphic ? (
-                <img
-                  src={voucherPromoGraphic}
-                  alt="Voucher Promotion"
-                  className="max-h-full max-w-full object-contain rounded-lg drop-shadow-md"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center p-1 bg-white/10 rounded-lg border border-white/20">
-                  <DefaultCartoonMascotSVG />
+            {/* Right Side: Scaled-Up Framed Promotional Graphic */}
+            <div className="w-[42%] max-w-[210px] h-full flex items-center justify-end shrink-0 pl-1 relative z-10">
+              <div className="relative w-full h-full rounded-xl overflow-hidden border-2 border-white/50 shadow-xl bg-slate-900/40 flex items-center justify-center">
+                {voucherPromoGraphic ? (
+                  <img
+                    src={voucherPromoGraphic}
+                    alt="Family Smiles"
+                    className="w-full h-full object-cover object-center"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-gradient-to-br from-[#E52629] to-[#991b1b] text-white text-center">
+                    <DefaultCartoonMascotSVG />
+                    <span className="text-[8px] font-bold mt-1 text-white/90">Healthy Family Smiles</span>
+                  </div>
+                )}
+                {/* Overlay Badge */}
+                <div className="absolute bottom-1 inset-x-1 bg-black/65 backdrop-blur-xs text-white text-[7.5px] font-extrabold py-0.5 px-1 rounded-md text-center truncate border border-white/20">
+                  ✨ आनंदी कुटुंब • निरोगी दात
                 </div>
-              )}
+              </div>
             </div>
           </div>
 
-          {/* Bottom 40%: Brand Red (#E52629) */}
-          <div className="h-[40%] bg-[#E52629] px-3 py-1.5 flex items-center justify-between gap-2 text-white overflow-hidden shadow-inner">
-            {/* Left: WhatsApp QR Code (Scan to Book) */}
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="w-[48px] h-[48px] p-0.5 bg-white rounded-lg shadow-md flex items-center justify-center shrink-0">
+          {/* Bottom Zone (~38% height): Brand Red (#E52629) */}
+          <div className="h-[38%] bg-[#E52629] px-3.5 py-2 flex items-center justify-between gap-3 text-white overflow-hidden shadow-inner relative">
+            {/* Subtle decorative inner border */}
+            <div className="absolute inset-1 border border-dashed border-white/20 rounded-xl pointer-events-none"></div>
+
+            {/* Left: Enlarged WhatsApp QR Code (66x66) with Punchy CTA */}
+            <div className="flex items-center gap-2.5 shrink-0 relative z-10">
+              <div className="w-[64px] h-[64px] p-1 bg-white rounded-xl shadow-lg border-2 border-white flex items-center justify-center shrink-0">
                 {qrDataUrl ? (
                   <img src={qrDataUrl} alt="WhatsApp QR Code" className="w-full h-full object-contain" />
                 ) : (
-                  <div className="text-[7px] text-slate-400 text-center">Loading...</div>
+                  <div className="text-[7.5px] text-slate-400 text-center">Loading QR...</div>
                 )}
               </div>
               <div className="leading-tight text-white">
-                <div className="text-[8.5px] font-black tracking-wide uppercase">Scan To Book</div>
-                <div className="text-[7.5px] font-bold text-amber-200">WhatsApp अपॉइंटमेंट</div>
-                <div className="text-[6.2px] text-white/80 font-medium">Voucher auto-fills</div>
+                <div className="text-[9.5px] font-black tracking-wide uppercase text-[#FEF08A] drop-shadow-xs">
+                  📱 Scan To Book
+                </div>
+                <div className="text-[8.5px] font-extrabold text-white mt-0.5">WhatsApp अपॉइंटमेंट</div>
+                <div className="text-[7px] text-white/80 font-medium mt-0.5">Voucher auto-fills</div>
               </div>
             </div>
 
-            {/* Center: Full Address & Phone */}
-            <div className="text-center px-1 flex-1 min-w-0 leading-tight">
-              <div className="text-[9.5px] font-black text-white uppercase tracking-tight truncate">
+            {/* Center: Authoritative Clinic Details (Doctor Name Omitted as Requested) */}
+            <div className="text-center px-1 flex-1 min-w-0 leading-tight relative z-10">
+              <div className="text-[12px] font-black text-white uppercase tracking-tight drop-shadow-sm truncate">
                 {clinicName}
               </div>
-              <div className="text-[7.2px] font-bold text-white/95 mt-0.5 line-clamp-2">
-                {clinicAddress}
+              <div className="text-[8px] font-bold text-amber-200 mt-0.5 flex items-center justify-center gap-1">
+                <span>⭐⭐⭐⭐⭐</span>
+                <span>Dental Wellness Center</span>
               </div>
-              <div className="inline-block mt-0.5 px-2 py-0.5 rounded bg-black/25 text-[#FEF08A] text-[8.5px] font-black tracking-wide border border-white/20">
-                📞 Call / WA: +91 {clinicPhone}
+              <div className="text-[7.5px] font-medium text-white/95 mt-0.5 line-clamp-2">
+                📍 {clinicAddress}
+              </div>
+              <div className="inline-block mt-1 px-3 py-0.5 rounded-full bg-[#1B2F5A] text-[#FEF08A] text-[9px] font-black tracking-wide border border-white/30 shadow-md">
+                📞 Call / WhatsApp: +91 {clinicPhone}
               </div>
             </div>
 
-            {/* Right: Clinic Logo in White Badge */}
-            <div className="shrink-0 flex items-center justify-end">
-              <div className="bg-white px-2 py-1 rounded-lg shadow-md border border-white/30 flex items-center justify-center max-w-[100px]">
+            {/* Right: Clinic Logo in Symmetrical White Card */}
+            <div className="shrink-0 flex items-center justify-end relative z-10">
+              <div className="w-[92px] h-[64px] bg-white p-1.5 rounded-xl shadow-lg border-2 border-white/90 flex items-center justify-center">
                 {clinicLogo ? (
                   <img
                     src={clinicLogo}
                     alt="Clinic Logo"
-                    className="max-h-8 max-w-[90px] object-contain"
+                    className="max-h-full max-w-full object-contain"
                   />
                 ) : (
                   <DefaultAvmLogoBadge size="sm" />
