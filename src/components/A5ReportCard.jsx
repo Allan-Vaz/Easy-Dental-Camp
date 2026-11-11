@@ -409,35 +409,35 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicP
                 </div>
               </div>
 
-              {/* Horizontal Sub-segment 2: English Promotional Line (Center-aligned, Both Lines Pure White, Max 41 Chars) */}
+              {/* Horizontal Sub-segment 2: English Promotional Line (Center-aligned, 20px Line 1 Matches Marathi, Lighter Pop Shadow) */}
               <div className="flex-1 flex flex-col items-center justify-center text-center min-h-0 py-0.5 overflow-visible">
                 <div
-                  className="text-[15px] font-black text-white tracking-wide leading-tight truncate max-w-full"
+                  className="text-[20px] font-black text-white tracking-tight leading-tight truncate max-w-full"
                   style={{
-                    textShadow: '1.5px 1.5px 0px #0e244d, 3px 3px 0px #071329, 0 2px 8px rgba(0,0,0,0.7)'
+                    textShadow: '0 0 8px rgba(186, 230, 253, 0.95), 0 2px 12px rgba(56, 189, 248, 0.7), 1px 1px 3px rgba(10, 17, 34, 0.8)'
                   }}
                 >
                   {englishOfferLine1}
                 </div>
                 <div
-                  className="text-[13px] font-black text-white tracking-wide leading-tight mt-1 truncate max-w-full"
+                  className="text-[13.5px] font-black text-white tracking-wide leading-tight mt-1 truncate max-w-full"
                   style={{
-                    textShadow: '1.5px 1.5px 0px #0e244d, 3px 3px 0px #071329, 0 2px 8px rgba(0,0,0,0.7)'
+                    textShadow: '0 0 6px rgba(186, 230, 253, 0.9), 0 2px 10px rgba(56, 189, 248, 0.6), 1px 1px 2px rgba(10, 17, 34, 0.7)'
                   }}
                 >
                   {englishOfferLine2}
                 </div>
               </div>
 
-              {/* Horizontal Sub-segment 3: Valid Till Date Pill (Shorter by ~1/3rd, No Calendar Icon, Continuous Yellow) */}
-              <div className="flex-1 flex items-center min-h-0 pt-0.5">
+              {/* Horizontal Sub-segment 3: Valid Till Date Pill (Center Aligned, Shorter by ~1/3rd, Stacked Centered Labels, No Colon) */}
+              <div className="flex-1 flex items-center justify-center min-h-0 pt-0.5">
                 <div className="w-[68%] max-w-[240px] h-full max-h-[34px] px-3.5 py-1 rounded-xl bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300 text-[#1B2F5A] border-2 border-white shadow-lg flex items-center justify-between font-black">
-                  <div className="flex flex-col leading-none">
-                    <span className="text-[9.5px] font-black tracking-tight text-[#1B2F5A] uppercase">
+                  <div className="flex flex-col items-center text-center leading-none">
+                    <span className="text-[9.5px] font-black tracking-tight text-[#1B2F5A] uppercase text-center">
                       सवलत वैधता
                     </span>
-                    <span className="text-[7.5px] font-black text-[#1B2F5A]/85 uppercase tracking-wider mt-0.5">
-                      OFFER VALID TILL:
+                    <span className="text-[7.5px] font-black text-[#1B2F5A]/85 uppercase tracking-wider mt-0.5 text-center">
+                      OFFER VALID TILL
                     </span>
                   </div>
                   <div className="text-[13px] font-black text-[#1B2F5A] font-mono tracking-wide pl-2">
