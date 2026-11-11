@@ -409,12 +409,12 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicP
                 </div>
               </div>
 
-              {/* Horizontal Sub-segment 2: English Promotional Line (Center-aligned, 20px Line 1 Matches Marathi, Lighter Pop Shadow) */}
+              {/* Horizontal Sub-segment 2: English Promotional Line (Center-aligned, 20px Line 1 Matches Marathi, Ice Blue Directional 3D Shadow) */}
               <div className="flex-1 flex flex-col items-center justify-center text-center min-h-0 py-0.5 overflow-visible">
                 <div
                   className="text-[20px] font-black text-white tracking-tight leading-tight truncate max-w-full"
                   style={{
-                    textShadow: '0 0 8px rgba(186, 230, 253, 0.95), 0 2px 12px rgba(56, 189, 248, 0.7), 1px 1px 3px rgba(10, 17, 34, 0.8)'
+                    textShadow: '2px 2px 0px #38bdf8, 3.5px 3.5px 0px #0284c7, 4px 4px 6px rgba(0,0,0,0.75)'
                   }}
                 >
                   {englishOfferLine1}
@@ -422,7 +422,7 @@ export const A5ReportCard = ({ student, camp, group, diagnosesList = [], clinicP
                 <div
                   className="text-[13.5px] font-black text-white tracking-wide leading-tight mt-1 truncate max-w-full"
                   style={{
-                    textShadow: '0 0 6px rgba(186, 230, 253, 0.9), 0 2px 10px rgba(56, 189, 248, 0.6), 1px 1px 2px rgba(10, 17, 34, 0.7)'
+                    textShadow: '1.5px 1.5px 0px #38bdf8, 2.5px 2.5px 0px #0284c7, 3px 3px 5px rgba(0,0,0,0.7)'
                   }}
                 >
                   {englishOfferLine2}
