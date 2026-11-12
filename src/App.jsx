@@ -52,13 +52,6 @@ export default function App() {
   const [isClinicModalOpen, setIsClinicModalOpen] = useState(false);
 
   // Auto-save to LocalStorage on every change for 100% offline persistence
-  useEffect(() => {
-    try {
-      localStorage.removeItem('undefined');
-    } catch (e) {
-      console.warn(e);
-    }
-  }, []);
 
   useEffect(() => {
     saveLocalFallback('CLINIC_PROFILE', clinicProfile);
@@ -167,42 +160,82 @@ export default function App() {
     const toothDiagCol = collection(db, 'tooth_diagnoses');
     const clinicDoc = doc(db, 'clinic_settings', 'default_profile');
 
-    const unsubClinic = onSnapshot(clinicDoc, (snap) => {
-      if (snap.exists()) {
-        setClinicProfile(snap.data());
+    const unsubClinic = onSnapshot(
+      clinicDoc,
+      (snap) => {
+        if (snap.exists()) {
+          const cloudData = snap.data();
+          if (cloudData && typeof cloudData === 'object' && Object.keys(cloudData).length > 0) {
+            setClinicProfile((prev) => ({ ...DEFAULT_CLINIC_PROFILE, ...prev, ...cloudData }));
+          }
+        }
+      },
+      (err) => {
+        console.warn('Firestore clinic sync info (using local persistence):', err.code);
       }
-    });
+    );
 
-    const unsubCamps = onSnapshot(campsCol, (snap) => {
-      if (!snap.empty) {
-        setCamps(snap.docs.map((d) => d.data()));
+    const unsubCamps = onSnapshot(
+      campsCol,
+      (snap) => {
+        if (!snap.empty) {
+          setCamps(snap.docs.map((d) => d.data()));
+        }
+        setSyncStatus('synced');
+      },
+      (err) => {
+        console.warn('Firestore camps sync info (using local persistence):', err.code);
+        setSyncStatus('offline');
       }
-      setSyncStatus('synced');
-    });
+    );
 
-    const unsubPatients = onSnapshot(patientsCol, (snap) => {
-      if (!snap.empty) {
-        setPatients(snap.docs.map((d) => d.data()));
+    const unsubPatients = onSnapshot(
+      patientsCol,
+      (snap) => {
+        if (!snap.empty) {
+          setPatients(snap.docs.map((d) => d.data()));
+        }
+      },
+      (err) => {
+        console.warn('Firestore patients sync info:', err.code);
       }
-    });
+    );
 
-    const unsubStaff = onSnapshot(staffCol, (snap) => {
-      if (!snap.empty) {
-        setStaffList(snap.docs.map((d) => d.data()));
+    const unsubStaff = onSnapshot(
+      staffCol,
+      (snap) => {
+        if (!snap.empty) {
+          setStaffList(snap.docs.map((d) => d.data()));
+        }
+      },
+      (err) => {
+        console.warn('Firestore staff sync info:', err.code);
       }
-    });
+    );
 
-    const unsubDiag = onSnapshot(diagCol, (snap) => {
-      if (!snap.empty) {
-        setDiagnosesList(snap.docs.map((d) => d.data()));
+    const unsubDiag = onSnapshot(
+      diagCol,
+      (snap) => {
+        if (!snap.empty) {
+          setDiagnosesList(snap.docs.map((d) => d.data()));
+        }
+      },
+      (err) => {
+        console.warn('Firestore diagnoses sync info:', err.code);
       }
-    });
+    );
 
-    const unsubToothDiag = onSnapshot(toothDiagCol, (snap) => {
-      if (!snap.empty) {
-        setToothDiagnosesList(snap.docs.map((d) => d.data()));
+    const unsubToothDiag = onSnapshot(
+      toothDiagCol,
+      (snap) => {
+        if (!snap.empty) {
+          setToothDiagnosesList(snap.docs.map((d) => d.data()));
+        }
+      },
+      (err) => {
+        console.warn('Firestore tooth diagnoses sync info:', err.code);
       }
-    });
+    );
 
     return () => {
       unsubClinic();

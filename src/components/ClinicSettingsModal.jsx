@@ -1,6 +1,44 @@
-import React, { useState } from 'react';
-import { Building2, Upload, Trash2, X, Check, Phone, MapPin, Sparkles, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Building2, Upload, Trash2, X, Check, Phone, MapPin, Sparkles, Image as ImageIcon, Download } from 'lucide-react';
 import { DefaultAvmLogoBadge } from './A5ReportCard';
+
+/**
+ * Compresses image file client-side to prevent LocalStorage 5MB quota overflow
+ * and stay well within Firestore's 1MB document size limit.
+ */
+const compressImageFile = (file, maxDim = 600, quality = 0.85) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        const dataUrl = canvas.toDataURL(mime, quality);
+        resolve(dataUrl);
+      };
+      img.onerror = () => resolve(e.target?.result || '');
+      img.src = e.target?.result;
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+};
 
 export const ClinicSettingsModal = ({
   isOpen,
@@ -9,25 +47,64 @@ export const ClinicSettingsModal = ({
   onSaveClinicProfile,
   showToast
 }) => {
-  const [form, setForm] = useState({ ...clinicProfile });
+  const [form, setForm] = useState({ ...(clinicProfile || {}) });
+
+  // Sync form state whenever modal is opened or clinicProfile updates
+  useEffect(() => {
+    if (isOpen && clinicProfile) {
+      setForm({ ...clinicProfile });
+    }
+  }, [isOpen, clinicProfile]);
 
   if (!isOpen) return null;
 
-  const handleImageUpload = (field) => (e) => {
+  const handleImageUpload = (field, maxDim = 600) => async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressedUrl = await compressImageFile(file, maxDim, 0.85);
+      setForm((prev) => ({ ...prev, [field]: compressedUrl }));
+      showToast('Image uploaded & optimized for safe offline storage!');
+    } catch (err) {
+      console.warn('Image compression error:', err);
+    }
+    e.target.value = '';
+  };
+
+  const handleExportBackup = () => {
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(form, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `clinic_master_profile_${new Date().toISOString().slice(0, 10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    showToast('Downloaded Clinic Profile backup file!');
+  };
+
+  const handleImportBackup = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (evt) => {
-      setForm((prev) => ({ ...prev, [field]: evt.target.result }));
+      try {
+        const imported = JSON.parse(evt.target.result);
+        if (imported && typeof imported === 'object') {
+          setForm((prev) => ({ ...prev, ...imported }));
+          showToast('Loaded profile from backup! Click "Save Master Profile" to commit.');
+        }
+      } catch (err) {
+        showToast('Invalid backup file.');
+      }
     };
-    reader.readAsDataURL(file);
+    reader.readAsText(file);
     e.target.value = '';
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     onSaveClinicProfile(form);
-    showToast('Clinic Master Profile saved successfully!');
+    showToast('✅ Clinic Master Profile saved permanently!');
     onClose();
   };
 
@@ -247,7 +324,7 @@ export const ClinicSettingsModal = ({
               <div className="flex items-center gap-1">
                 <label className="px-2.5 py-1.5 rounded-lg bg-[#1B2F5A] text-white text-[10px] font-bold cursor-pointer hover:bg-slate-800">
                   Upload
-                  <input type="file" accept="image/*" onChange={handleImageUpload('clinicLogoData')} className="hidden" />
+                  <input type="file" accept="image/*" onChange={handleImageUpload('clinicLogoData', 400)} className="hidden" />
                 </label>
                 {form.clinicLogoData && (
                   <button
@@ -279,7 +356,7 @@ export const ClinicSettingsModal = ({
               <div className="flex items-center gap-1">
                 <label className="px-2.5 py-1.5 rounded-lg bg-[#1B2F5A] text-white text-[10px] font-bold cursor-pointer hover:bg-slate-800">
                   Upload
-                  <input type="file" accept="image/*" onChange={handleImageUpload('doctorSignData')} className="hidden" />
+                  <input type="file" accept="image/*" onChange={handleImageUpload('doctorSignData', 400)} className="hidden" />
                 </label>
                 {form.doctorSignData && (
                   <button
@@ -309,7 +386,7 @@ export const ClinicSettingsModal = ({
                     Appears right-aligned in the top Navy Blue section of the tear-away voucher.
                   </div>
                   <div className="text-[9.5px] text-amber-700 font-medium mt-0.5">
-                    💡 Tip: PNG or JPG, 4:3 (e.g. 600×450px) or Square ratio, under 2 MB.
+                    💡 Auto-optimized: Large photos are resized to save storage space permanently.
                   </div>
                 </div>
               </div>
@@ -317,7 +394,7 @@ export const ClinicSettingsModal = ({
                 <label className="px-3 py-1.5 rounded-lg bg-[#1B2F5A] text-white text-[11px] font-bold cursor-pointer hover:bg-slate-800 transition shadow-sm flex items-center gap-1">
                   <Upload className="w-3.5 h-3.5" />
                   <span>Upload Graphic</span>
-                  <input type="file" accept="image/*" onChange={handleImageUpload('voucherPromoImageData')} className="hidden" />
+                  <input type="file" accept="image/*" onChange={handleImageUpload('voucherPromoImageData', 800)} className="hidden" />
                 </label>
                 {form.voucherPromoImageData && (
                   <button
@@ -333,21 +410,49 @@ export const ClinicSettingsModal = ({
             </div>
           </div>
 
-          <div className="pt-2 flex justify-end gap-2 border-t">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 font-bold hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-xl bg-[#1B2F5A] hover:bg-slate-800 text-white font-black shadow flex items-center gap-1.5"
-            >
-              <Check className="w-4 h-4" />
-              <span>Save Master Profile</span>
-            </button>
+          <div className="pt-3 flex flex-wrap items-center justify-between gap-2 border-t">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleExportBackup}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 flex items-center gap-1.5 shadow-xs"
+                title="Download a backup file of your clinic master profile"
+              >
+                <Download className="w-3.5 h-3.5 text-[#1B2F5A]" />
+                <span>Backup Profile (JSON)</span>
+              </button>
+
+              <label
+                className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 flex items-center gap-1.5 shadow-xs cursor-pointer"
+                title="Restore clinic profile from an exported backup file"
+              >
+                <Upload className="w-3.5 h-3.5 text-teal-700" />
+                <span>Restore Backup</span>
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={handleImportBackup}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 font-bold hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 rounded-xl bg-[#1B2F5A] hover:bg-slate-800 text-white font-black shadow flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>Save Master Profile</span>
+              </button>
+            </div>
           </div>
         </form>
       </div>
